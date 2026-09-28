@@ -437,6 +437,8 @@
 
     <script>
         const GOOGLE_CLIENT_ID = '858401202746-d89bi2hli17tc1aob4jibfdrs7o6ab1l.apps.googleusercontent.com';
+        const GOOGLE_DRIVE_FILE_NAME = 'dsm_data.json';
+        const GOOGLE_DRIVE_FILE_KEY = 'dsm_google_drive_file_id';
 
         let currentSection = 'hero';
         let viewMode = localStorage.getItem('dsm_view_mode') || 'card';
@@ -1406,12 +1408,173 @@
             }
         }
 
+        function setGoogleConnState(isConnected) {
+            const btnText = document.getElementById('google-btn-text');
+            const btn = document.getElementById('google-login-btn');
+            if (!btnText || !btn) return;
+
+            btnText.textContent = isConnected ? '已連結 Google 雲端' : 'Google 登入同步';
+            btn.classList.toggle('border-emerald-500', isConnected);
+            btn.classList.toggle('text-emerald-600', isConnected);
+        }
+
+        function buildDriveBackupPayload() {
+            return {
+                categories,
+                categorySchemas,
+                items,
+                heroTitle,
+                heroBgUrl,
+                updatedAt: new Date().toISOString(),
+                version: 1
+            };
+        }
+
+        async function listGoogleDriveAppDataFiles() {
+            if (!googleAccessToken) return [];
+
+            const response = await fetch(
+                `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q=${encodeURIComponent("name='" + GOOGLE_DRIVE_FILE_NAME + "' and trashed=false")}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${googleAccessToken}`,
+                        Accept: 'application/json'
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Google Drive 查詢失敗：${response.status}`);
+            }
+
+            const data = await response.json();
+            return Array.isArray(data.files) ? data.files : [];
+        }
+
+        async function loadFromGoogleDrive() {
+            if (!googleAccessToken) return false;
+
+            const files = await listGoogleDriveAppDataFiles();
+            const targetFile = files.find(file => file.name === GOOGLE_DRIVE_FILE_NAME);
+            if (!targetFile) return false;
+
+            localStorage.setItem(GOOGLE_DRIVE_FILE_KEY, targetFile.id);
+
+            const response = await fetch(`https://www.googleapis.com/drive/v3/files/${targetFile.id}?alt=media`, {
+                headers: {
+                    Authorization: `Bearer ${googleAccessToken}`,
+                    Accept: 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Google Drive 讀取失敗：${response.status}`);
+            }
+
+            const data = await response.json();
+            if (!data || typeof data !== 'object') return false;
+
+            if (Array.isArray(data.items)) items = data.items;
+            if (Array.isArray(data.categories)) categories = data.categories;
+            if (data.categorySchemas) categorySchemas = data.categorySchemas;
+            if (data.heroTitle) heroTitle = data.heroTitle;
+            if (data.heroBgUrl) heroBgUrl = data.heroBgUrl;
+
+            saveToLocalStorageAndDrive();
+            applyHeroSettingsUI();
+            renderCategoryOptions();
+            filterAndRender();
+            return true;
+        }
+
+        async function createGoogleDriveBackupFile(payload) {
+            const metadata = {
+                name: GOOGLE_DRIVE_FILE_NAME,
+                mimeType: 'application/json',
+                parents: ['appDataFolder']
+            };
+
+            const formData = new FormData();
+            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            formData.append('file', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+
+            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${googleAccessToken}`
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Google Drive 建立檔案失敗：${response.status} - ${text}`);
+            }
+
+            const result = await response.json();
+            localStorage.setItem(GOOGLE_DRIVE_FILE_KEY, result.id || '');
+            return result;
+        }
+
+        async function updateGoogleDriveBackupFile(fileId, payload) {
+            const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                method: 'PATCH',
+                headers: {
+                    Authorization: `Bearer ${googleAccessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Google Drive 更新失敗：${response.status} - ${text}`);
+            }
+
+            return response.json();
+        }
+
+        async function syncToGoogleDrive() {
+            if (!googleAccessToken) return;
+
+            try {
+                const payload = buildDriveBackupPayload();
+                const files = await listGoogleDriveAppDataFiles();
+                const targetFile = files.find(file => file.name === GOOGLE_DRIVE_FILE_NAME);
+
+                if (targetFile) {
+                    await updateGoogleDriveBackupFile(targetFile.id, payload);
+                } else {
+                    await createGoogleDriveBackupFile(payload);
+                }
+            } catch (error) {
+                console.error('Google Drive 同步錯誤：', error);
+                Swal.fire({
+                    title: '雲端同步失敗',
+                    text: '請確認 Google Drive 權限是否已授權，且 Client ID 正確。',
+                    icon: 'error',
+                    confirmButtonText: '確認'
+                });
+            }
+        }
+
         function handleGoogleDriveAuth() {
             if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
                 Swal.fire({
                     title: '未設定 Google Client ID',
-                    text: '請在 index.html 程式碼填入您申請的 GOOGLE_CLIENT_ID 即可啟用。',
-                    icon: 'info'
+                    text: '請在 index.html 中填入你在 Google Cloud 建立好的 OAuth Client ID，然後重新點擊登入。',
+                    icon: 'info',
+                    confirmButtonText: '我知道了'
+                });
+                return;
+            }
+
+            if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+                Swal.fire({
+                    title: 'Google SDK 尚未載入',
+                    text: '請稍後再試一次，或重新整理頁面。',
+                    icon: 'warning',
+                    confirmButtonText: '確認'
                 });
                 return;
             }
@@ -1419,19 +1582,49 @@
             const tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: GOOGLE_CLIENT_ID,
                 scope: 'https://www.googleapis.com/auth/drive.appdata',
-                callback: (response) => {
+                callback: async (response) => {
+                    if (response.error) {
+                        console.error('Google OAuth 錯誤：', response);
+                        Swal.fire({
+                            title: '登入失敗',
+                            text: response.error_description || 'Google 驗證無法完成。',
+                            icon: 'error',
+                            confirmButtonText: '確認'
+                        });
+                        return;
+                    }
+
                     if (response.access_token) {
                         googleAccessToken = response.access_token;
-                        document.getElementById('google-btn-text').textContent = '已連結 Google 雲端';
-                        document.getElementById('google-login-btn').classList.add('border-emerald-500', 'text-emerald-600');
-                        Swal.fire({ title: '已成功登入 Google！', text: '已啟動 Google Drive 雲端自動同步。', icon: 'success', timer: 1800, showConfirmButton: false });
-                    }
-                },
-            });
-            tokenClient.requestAccessToken();
-        }
+                        setGoogleConnState(true);
 
-        async function syncToGoogleDrive() {}
+                        try {
+                            const backupExists = await loadFromGoogleDrive();
+                            if (!backupExists) {
+                                await syncToGoogleDrive();
+                            }
+                            Swal.fire({
+                                title: '已成功登入 Google！',
+                                text: 'Google Drive 雲端同步已啟動。',
+                                icon: 'success',
+                                timer: 1800,
+                                showConfirmButton: false
+                            });
+                        } catch (error) {
+                            console.error('Google Drive 初始同步錯誤：', error);
+                            Swal.fire({
+                                title: '同步初始化失敗',
+                                text: '已登入，但雲端同步尚未完成，請稍後再試。',
+                                icon: 'warning',
+                                confirmButtonText: '確認'
+                            });
+                        }
+                    }
+                }
+            });
+
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+        }
     </script>
 </body>
 </html>

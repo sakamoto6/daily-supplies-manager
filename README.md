@@ -30,6 +30,56 @@ python -m http.server 8000
 http://localhost:8000
 ```
 
+## Google Drive 設定（必填）
+
+這個專案內建了 Google 登入與 Drive appData 同步功能，但需要你自行建立 Google OAuth 2.0 Client ID。
+
+### 1. 建立 Google Cloud 專案
+
+1. 前往 Google Cloud Console：https://console.cloud.google.com/
+2. 建立新的專案
+3. 啟用 Google Drive API
+4. 進入 APIs & Services → Credentials
+5. 建立 OAuth 2.0 Client ID
+
+### 2. 設定授權 JavaScript 原始碼
+
+在 OAuth Client 設定中，加入以下網址：
+
+```text
+http://localhost:8000
+```
+
+如果你要部署到 GitHub Pages 或正式網站，也可加入：
+
+```text
+https://你的帳號.github.io/你的專案名稱/
+```
+
+### 3. 填入 Client ID
+
+在 [index.html](index.html) 的最上方 JavaScript 區塊中，將：
+
+```js
+const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID';
+```
+
+改成你自己的 Client ID，例如：
+
+```js
+const GOOGLE_CLIENT_ID = '1234567890-abcdefghijklmno.apps.googleusercontent.com';
+```
+
+### 4. 授權範圍
+
+本專案使用：
+
+```text
+https://www.googleapis.com/auth/drive.appdata
+```
+
+這樣可以將資料儲存在 Google Drive 的 appData 資料夾中，僅供你的應用程式使用。
+
 ## GitHub 部署方式
 
 ### 1. 初始化 Git
