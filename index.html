@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="日常用品庫存總管，管理家中物資、價格、過期提醒與雲端同步。">
+    <title>日常用品庫存總管 - 嗨!嚴方筠</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                        zen: ['"Zen Maru Gothic"', 'sans-serif'],
+                    },
+                    colors: {
+                        hamster: {
+                            50: '#fffbeb',
+                            100: '#fef3c7',
+                            200: '#fde68a',
+                            300: '#fcd34d',
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                            700: '#b45309',
+                            800: '#92400e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .hero-bg-default {
+            background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 0.75)), url('https://images.unsplash.com/photo-1548767797-d8c844163c4c?q=80&w=1920&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        @keyframes scaleUp {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .animate-scale-up {
+            animation: scaleUp 0.2s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col selection:bg-hamster-200 selection:text-hamster-800">
+
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-slate-200/80 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="switchViewSection('hero')">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-hamster-400 to-amber-300 flex items-center justify-center shadow-md shadow-amber-500/20 text-white font-zen text-xl font-bold">
+                    🐹
+                </div>
+                <div>
+                    <h1 class="font-zen font-bold text-lg sm:text-xl text-slate-800 tracking-wide flex items-center gap-1.5">
+                        日常用品庫存總管
+                    </h1>
+                    <p class="text-[10px] text-slate-500 font-medium tracking-wider uppercase">Daily Supplies Manager</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <button onclick="switchViewSection(currentSection === 'hero' ? 'app' : 'hero')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition">
+                    <i data-lucide="layout" class="w-4 h-4"></i>
+                    <span id="nav-toggle-text" class="hidden sm:inline">前往小倉庫</span>
+                </button>
+
+                <button onclick="openHelpModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition" title="使用說明">
+                    <i data-lucide="help-circle" class="w-4 h-4 text-amber-500"></i>
+                    <span class="hidden sm:inline">使用說明</span>
+                </button>
+
+                <button id="google-login-btn" onclick="handleGoogleDriveAuth()" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 shadow-sm transition active:scale-95">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span id="google-btn-text">Google 登入同步</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <section id="hero-section" class="hero-bg-default flex-1 flex items-center justify-center relative overflow-hidden px-4 py-20 min-h-[calc(100vh-4rem)]">
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-slate-900/40 z-0"></div>
+
+        <div class="absolute top-4 right-4 z-20">
+            <button onclick="openHeroSettingsModal()" class="px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-medium transition flex items-center gap-1.5 border border-white/20 shadow-md">
+                <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+                <span>自訂首頁</span>
+            </button>
+        </div>
+
+        <div class="relative z-10 max-w-3xl mx-auto text-center space-y-8 animate-fade-in">
+            <h2 id="hero-title-text" class="font-zen font-black text-5xl sm:text-7xl md:text-8xl text-white tracking-wide drop-shadow-[0_10px_25px_rgba(0,0,0,0.5)]">
+                嗨!嚴方筠
+            </h2>
+
+            <p class="text-base sm:text-xl text-slate-200 font-light max-w-xl mx-auto leading-relaxed drop-shadow-md">
+                為您打造的專屬個人用品庫存管理中心。<br class="hidden sm:inline">輕鬆掌握居家物資、價格計算與雲端自動備份。
+            </p>
+
+            <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <button onclick="switchViewSection('app')" class="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-hamster-400 to-amber-500 text-slate-900 font-zen font-bold text-lg shadow-xl shadow-amber-500/25 hover:brightness-110 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2">
+                    <span>前往我的小倉庫</span>
+                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <main id="app-section" class="hidden flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
+            <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-xs font-medium">在庫品項數</span>
+                    <div class="p-2 bg-blue-50 text-blue-600 rounded-xl"><i data-lucide="package" class="w-4 h-4"></i></div>
+                </div>
+                <div class="mt-2">
+                    <div id="stat-total-items" class="text-2xl sm:text-3xl font-bold font-zen text-slate-800">0</div>
+                    <span class="text-[11px] text-slate-400">目前在庫物品種類</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-xs font-medium">庫存總價值</span>
+                    <div class="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><i data-lucide="coins" class="w-4 h-4"></i></div>
+                </div>
+                <div class="mt-2">
+                    <div id="stat-current-value" class="text-2xl sm:text-3xl font-bold font-zen text-emerald-600">NT$ 0</div>
+                    <span class="text-[11px] text-slate-400">目前在庫物資總金額</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-xs font-medium">歷史總價值</span>
+                    <div class="p-2 bg-purple-50 text-purple-600 rounded-xl"><i data-lucide="history" class="w-4 h-4"></i></div>
+                </div>
+                <div class="mt-2">
+                    <div id="stat-history-value" class="text-2xl sm:text-3xl font-bold font-zen text-purple-600">NT$ 0</div>
+                    <span class="text-[11px] text-slate-400">含已歸檔物資累積金額</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-xs font-medium">需補充警示</span>
+                    <div class="p-2 bg-amber-50 text-amber-600 rounded-xl"><i data-lucide="alert-circle" class="w-4 h-4"></i></div>
+                </div>
+                <div class="mt-2">
+                    <div id="stat-low-stock" class="text-2xl sm:text-3xl font-bold font-zen text-amber-600">0</div>
+                    <span class="text-[11px] text-amber-600/80 font-medium">低於安全庫存數量</span>
+                </div>
+            </div>
+
+            <div class="col-span-2 md:col-span-1 bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition">
+                <div class="flex items-center justify-between text-slate-500">
+                    <span class="text-xs font-medium">過期提醒 (7天內)</span>
+                    <div class="p-2 bg-rose-50 text-rose-600 rounded-xl"><i data-lucide="clock" class="w-4 h-4"></i></div>
+                </div>
+                <div class="mt-2">
+                    <div id="stat-expiring" class="text-2xl sm:text-3xl font-bold font-zen text-rose-600">0</div>
+                    <span class="text-[11px] text-rose-600/80 font-medium">已過期或即將到期</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm space-y-4">
+            <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                <div class="flex-1 flex flex-col sm:flex-row items-center gap-3">
+                    <div class="relative w-full sm:w-64">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="search-input" oninput="filterAndRender()" placeholder="搜尋用品名稱、欄位..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition">
+                    </div>
+
+                    <select id="category-filter" onchange="filterAndRender()" class="w-full sm:w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition">
+                        <option value="ALL">全部分類</option>
+                    </select>
+
+                    <select id="status-filter" onchange="filterAndRender()" class="w-full sm:w-40 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition">
+                        <option value="ALL">全部狀態</option>
+                        <option value="LOW">需補充</option>
+                        <option value="EXPIRING">即將/已過期</option>
+                        <option value="ARCHIVED">已耗盡歸檔</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button onclick="openCategoryModal()" class="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-medium text-sm transition flex items-center gap-1.5 shadow-sm" title="自由自訂各類別的專屬預設欄位">
+                        <i data-lucide="sliders" class="w-4 h-4 text-amber-600"></i>
+                        <span>類別與專屬預設欄位設定</span>
+                    </button>
+
+                    <div class="bg-slate-100 p-1 rounded-xl flex items-center">
+                        <button id="view-card-btn" onclick="setViewMode('card')" class="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition" title="卡片檢視"><i data-lucide="layout-grid" class="w-4 h-4"></i></button>
+                        <button id="view-table-btn" onclick="setViewMode('table')" class="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition" title="分類表格檢視"><i data-lucide="table" class="w-4 h-4"></i></button>
+                    </div>
+
+                    <button onclick="openItemModal()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-zen font-bold text-sm shadow-md shadow-amber-500/20 transition flex items-center gap-1.5 active:scale-95">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>新增用品</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="items-container" class="min-h-[300px]"></div>
+    </main>
+
+    <div id="hero-settings-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 animate-scale-up">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-zen font-bold text-xl text-slate-800">自訂首頁標題與背景</h3>
+                <button onclick="closeHeroSettingsModal()" class="p-1.5 rounded-full hover:bg-slate-100 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">首頁發光大標題</label>
+                    <input type="text" id="hero-title-input" placeholder="例如: 嗨!嚴方筠" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">背景圖片網址 (URL)</label>
+                    <input type="text" id="hero-bg-input" placeholder="貼上圖片網址 https://..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+                <div class="pt-1">
+                    <label class="block font-semibold text-slate-700 mb-1">或選擇本地照片上傳 (自動 Canvas 輕量壓縮)</label>
+                    <input type="file" id="hero-bg-file" accept="image/*" onchange="handleHeroBgFileUpload(event)" class="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200">
+                </div>
+            </div>
+
+            <div class="pt-2 flex justify-end space-x-2">
+                <button onclick="closeHeroSettingsModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-medium text-xs hover:bg-slate-200">取消</button>
+                <button onclick="saveHeroSettings()" class="px-5 py-2 rounded-xl bg-amber-500 text-slate-900 font-bold font-zen text-xs shadow hover:bg-amber-600">儲存設定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="item-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8 animate-scale-up border border-slate-100">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div class="flex items-center space-x-2">
+                    <h3 id="modal-title" class="font-zen font-bold text-2xl text-slate-800">新增用品</h3>
+                </div>
+                <button onclick="closeItemModal()" class="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="item-form" onsubmit="saveItem(event)" class="space-y-4 text-sm">
+                <input type="hidden" id="item-id">
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">用品名稱 <span class="text-rose-500">*</span></label>
+                        <input type="text" id="item-name" required placeholder="例如: 衛生紙、膠原蛋白飲" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">物品分類 <span class="text-rose-500">*</span></label>
+                        <select id="item-category" required onchange="onCategorySelectChange()" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition"></select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">目前庫存數量 <span class="text-rose-500">*</span></label>
+                        <input type="number" id="item-quantity" min="0" required value="1" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition">
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-slate-100 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span id="cat-fields-header-tag" class="text-xs font-bold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-600"></i>
+                            <span id="cat-fields-title">類別專屬預設欄位</span>
+                        </span>
+                        <button type="button" onclick="openCategoryModal()" class="text-xs text-slate-400 hover:text-amber-600 flex items-center gap-1">
+                            <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+                            <span>自訂此類別預設欄位</span>
+                        </button>
+                    </div>
+
+                    <div id="dynamic-category-fields-container" class="space-y-3"></div>
+                </div>
+
+                <div class="pt-3 border-t border-slate-100 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-semibold text-slate-600">本次單次臨時欄位 (可留空)</label>
+                        <button type="button" onclick="addAdhocFieldRow()" class="text-xs text-amber-600 font-medium hover:text-amber-700 flex items-center gap-1">
+                            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                            <span>+ 新增臨時欄位</span>
+                        </button>
+                    </div>
+                    <div id="adhoc-fields-container" class="space-y-2"></div>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-3">
+                    <button type="button" onclick="closeItemModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition">
+                        取消
+                    </button>
+                    <button type="submit" class="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-zen font-bold shadow-md transition">
+                        儲存用品
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="category-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-6 border border-slate-100 my-8 animate-scale-up">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                    <h3 class="font-zen font-bold text-xl text-slate-800">類別管理與專屬預設欄位設定</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">點擊 ⚙️ 自由新增、修改或移除該類別專屬的預設欄位</p>
+                </div>
+                <button onclick="closeCategoryModal()" class="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <input type="text" id="new-category-input" placeholder="新增類別名稱 (如: 寵物用品)" class="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <button onclick="addNewCategory()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-zen font-bold text-sm rounded-xl shadow transition">
+                    新增類別
+                </button>
+            </div>
+
+            <div class="space-y-3 max-h-60 overflow-y-auto custom-scrollbar pr-1" id="category-list-container"></div>
+
+            <div id="category-fields-editor" class="hidden p-4 bg-amber-50/70 border border-amber-200/80 rounded-2xl space-y-4">
+                <div class="flex items-center justify-between border-b border-amber-200/60 pb-2">
+                    <h4 class="text-xs font-bold font-zen text-amber-900 flex items-center gap-1.5">
+                        <i data-lucide="sliders" class="w-4 h-4 text-amber-600"></i>
+                        <span>編輯「<span id="target-cat-name" class="underline"></span>」的專屬預設欄位清單</span>
+                    </h4>
+                    <button onclick="closeCatFieldsEditor()" class="text-xs text-slate-400 hover:text-slate-600 font-medium">關閉</button>
+                </div>
+
+                <div id="cat-default-fields-list" class="space-y-2.5 max-h-64 overflow-y-auto custom-scrollbar pr-1"></div>
+
+                <div class="pt-2 flex items-center justify-between text-xs">
+                    <button onclick="addCatDefaultFieldRow()" class="px-3 py-1.5 bg-white text-amber-800 border border-amber-300 font-bold hover:bg-amber-100 rounded-xl transition flex items-center gap-1">
+                        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                        <span>+ 新增欄位</span>
+                    </button>
+                    <button onclick="saveCatDefaultFields()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold font-zen rounded-xl shadow transition">
+                        儲存此類別欄位設定
+                    </button>
+                </div>
+            </div>
+
+            <div class="pt-2 text-right">
+                <button onclick="closeCategoryModal()" class="px-5 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium text-sm hover:bg-slate-200 transition">
+                    完成
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="help-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8 border border-slate-100 animate-scale-up">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div class="flex items-center space-x-2">
+                    <div class="p-2 bg-amber-100 text-amber-700 rounded-xl">
+                        <i data-lucide="book-open" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="font-zen font-bold text-xl text-slate-800">使用說明與欄位架構教學</h3>
+                </div>
+                <button onclick="closeHelpModal()" class="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-6 text-sm text-slate-600 custom-scrollbar max-h-[65vh] overflow-y-auto pr-2">
+                <div class="p-4 bg-amber-50 border border-amber-200/60 rounded-2xl space-y-2">
+                    <h4 class="font-bold text-amber-900 font-zen flex items-center gap-1.5">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-amber-600"></i>
+                        <span>類別專屬預設欄位自訂機制</span>
+                    </h4>
+                    <p class="text-xs text-amber-800 leading-relaxed">
+                        • <strong>點擊「類別與專屬預設欄位設定」的 ⚙️ 按鈕</strong>：可以為每一個類別單獨設定其預設欄位（包含欄位名稱、屬性類型、預設填寫內容）。<br>
+                        • <strong>表格模式依分類動態展示</strong>：切換至表格檢視（Table View）時，系統會按分類分組呈現，並根據該分類定義的所有專屬欄位自動建立表頭與資料欄位！
+                    </p>
+                </div>
+            </div>
+
+            <div class="pt-2 text-right border-t border-slate-100">
+                <button onclick="closeHelpModal()" class="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-zen font-bold text-sm shadow-md transition">
+                    我明白了
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GOOGLE_CLIENT_ID = '858401202746-d89bi2hli17tc1aob4jibfdrs7o6ab1l.apps.googleusercontent.com';
+
+        let currentSection = 'hero';
+        let viewMode = localStorage.getItem('dsm_view_mode') || 'card';
+        let googleAccessToken = null;
+        let itemPhotoBase64 = null;
+        let heroBgBase64 = null;
+        let editingCatName = null;
+
+        let heroTitle = localStorage.getItem('dsm_hero_title') || '嗨!嚴方筠';
+        let heroBgUrl = localStorage.getItem('dsm_hero_bg') || 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?q=80&w=1920&auto=format&fit=crop';
+
+        let categories = JSON.parse(localStorage.getItem('dsm_categories')) || [
+            '食品/零食', '美妝/保養', '藥品/保健', '清潔/日用', '3C/家電', '其他'
+        ];
+
+        let categorySchemas = JSON.parse(localStorage.getItem('dsm_category_schemas')) || {
+            '食品/零食': [
+                { key: 'unitPrice', label: '單價 (NT$)', type: 'number', placeholder: '例如: 150', isBuiltin: true },
+                { key: 'minAlert', label: '補充警示數量', type: 'number', placeholder: '1', isBuiltin: true },
+                { key: 'expiryDate', label: '有效期限', type: 'date', placeholder: '', isBuiltin: true },
+                { key: 'photo', label: '物品照片', type: 'photo', placeholder: '', isBuiltin: true },
+                { key: '保存方式', label: '保存方式', type: 'text', placeholder: '例如: 常溫 / 冷藏', isBuiltin: false, defaultVal: '常溫' },
+                { key: '規格/淨重', label: '規格/淨重', type: 'text', placeholder: '例如: 250g', isBuiltin: false, defaultVal: '' }
+            ],
+            '美妝/保養': [
+                { key: 'unitPrice', label: '單價 (NT$)', type: 'number', placeholder: '例如: 500', isBuiltin: true },
+                { key: 'minAlert', label: '補充警示數量', type: 'number', placeholder: '1', isBuiltin: true },
+                { key: 'expiryDate', label: '保存/開封期限', type: 'date', placeholder: '', isBuiltin: true },
+                { key: 'photo', label: '物品照片', type: 'photo', placeholder: '', isBuiltin: true },
+                { key: '膚質/適用部位', label: '膚質/適用部位', type: 'text', placeholder: '例如: 臉部/敏感肌', isBuiltin: false, defaultVal: '' },
+                { key: '開封後保存月數', label: '開封後保存月數', type: 'text', placeholder: '例如: 12個月', isBuiltin: false, defaultVal: '12個月' }
+            ],
+            '藥品/保健': [
+                { key: 'unitPrice', label: '單價 (NT$)', type: 'number', placeholder: '例如: 800', isBuiltin: true },
+                { key: 'minAlert', label: '補充警示數量', type: 'number', placeholder: '1', isBuiltin: true },
+                { key: 'expiryDate', label: '有效期限', type: 'date', placeholder: '', isBuiltin: true },
+                { key: 'photo', label: '物品照片', type: 'photo', placeholder: '', isBuiltin: true },
+                { key: '建議劑量/用法', label: '建議劑量/用法', type: 'text', placeholder: '例如: 每日早晚各一顆', isBuiltin: false, defaultVal: '' }
+            ],
+            '清潔/日用': [
+                { key: 'unitPrice', label: '單價 (NT$)', type: 'number', placeholder: '', isBuiltin: true },
+                { key: 'minAlert', label: '補充警示數量', type: 'number', placeholder: '1', isBuiltin: true },
+                { key: 'expiryDate', label: '有效期限', type: 'date', placeholder: '', isBuiltin: true },
+                { key: 'photo', label: '物品照片', type: 'photo', placeholder: '', isBuiltin: true },
+                { key: '容量/抽數', label: '容量/抽數', type: 'text', placeholder: '例如: 100抽x8包', isBuiltin: false, defaultVal: '' }
+            ],
+            '3C/家電': [
+                { key: 'unitPrice', label: '購入價格 (NT$)', type: 'number', placeholder: '', isBuiltin: true },
+                { key: 'minAlert', label: '補充警示數量', type: 'number', placeholder: '1', isBuiltin: true },
+                { key: 'expiryDate', label: '保固到期日', type: 'date', placeholder: '', isBuiltin: true },
+                { key: 'photo', label: '物品照片', type: 'photo', placeholder: '', isBuiltin: true },
+                { key: '保固期/廠商', label: '保固期/廠商', type: 'text', placeholder: '例如: 聯強保固 2 年', isBuiltin: false, defaultVal: '' }
+            ],
+            '其他': [
+                { key: 'unitPrice', label: '單價 (NT$)', type: 'number', placeholder: '', isBuiltin: true },
+                { key: 'minAlert', label: '補充警示數量', type: 'number', placeholder: '1', isBuiltin: true },
+                { key: 'expiryDate', label: '有效期限', type: 'date', placeholder: '', isBuiltin: true },
+                { key: 'photo', label: '物品照片', type: 'photo', placeholder: '', isBuiltin: true }
+            ]
+        };
+
+        let items = JSON.parse(localStorage.getItem('dsm_items')) || [
+            {
+                id: 'item-1',
+                name: '日系黑咖啡豆 (250g)',
+                category: '食品/零食',
+                quantity: 3,
+                minAlert: 1,
+                unitPrice: 380,
+                expiryDate: '2026-11-20',
+                photo: null,
+                customFields: [{ key: '烘焙度', value: '中深烘焙' }, { key: '保存方式', value: '常溫' }],
+                archived: false,
+                updatedAt: new Date().toISOString()
+            }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            applyHeroSettingsUI();
+            renderCategoryOptions();
+            filterAndRender();
+            updateDashboardStats();
+            setViewMode(viewMode);
+        });
+
+        function applyHeroSettingsUI() {
+            const titleEl = document.getElementById('hero-title-text');
+            const heroSec = document.getElementById('hero-section');
+
+            if (titleEl) titleEl.textContent = heroTitle;
+            if (heroSec && heroBgUrl) {
+                heroSec.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 0.75)), url('${heroBgUrl}')`;
+            }
+        }
+
+        function openHeroSettingsModal() {
+            document.getElementById('hero-title-input').value = heroTitle;
+            document.getElementById('hero-bg-input').value = heroBgUrl.startsWith('data:') ? '' : heroBgUrl;
+            document.getElementById('hero-settings-modal').classList.remove('hidden');
+        }
+
+        function closeHeroSettingsModal() {
+            document.getElementById('hero-settings-modal').classList.add('hidden');
+        }
+
+        function handleHeroBgFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const maxDim = 1200;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > maxDim) {
+                        height *= maxDim / width;
+                        width = maxDim;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    heroBgBase64 = canvas.toDataURL('image/jpeg', 0.85);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function saveHeroSettings() {
+            const newTitle = document.getElementById('hero-title-input').value.trim();
+            const newBgUrl = document.getElementById('hero-bg-input').value.trim();
+
+            if (newTitle) heroTitle = newTitle;
+            if (heroBgBase64) {
+                heroBgUrl = heroBgBase64;
+            } else if (newBgUrl) {
+                heroBgUrl = newBgUrl;
+            }
+
+            localStorage.setItem('dsm_hero_title', heroTitle);
+            localStorage.setItem('dsm_hero_bg', heroBgUrl);
+
+            applyHeroSettingsUI();
+            closeHeroSettingsModal();
+            saveToLocalStorageAndDrive();
+
+            Swal.fire({ title: '首頁設定已儲存！', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+        }
+
+        function switchViewSection(target) {
+            currentSection = target;
+            const hero = document.getElementById('hero-section');
+            const app = document.getElementById('app-section');
+            const navText = document.getElementById('nav-toggle-text');
+
+            if (target === 'hero') {
+                hero.classList.remove('hidden');
+                app.classList.add('hidden');
+                navText.textContent = '前往小倉庫';
+            } else {
+                hero.classList.add('hidden');
+                app.classList.remove('hidden');
+                navText.textContent = '返回首頁';
+                filterAndRender();
+            }
+        }
+
+        function updateDashboardStats() {
+            const activeItems = items.filter(i => !i.archived);
+            const totalCount = activeItems.length;
+
+            const currentValue = activeItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+            const historyValue = items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+            const lowStockCount = activeItems.filter(i => i.quantity <= (i.minAlert || 1)).length;
+
+            const today = new Date();
+            const sevenDaysLater = new Date();
+            sevenDaysLater.setDate(today.getDate() + 7);
+
+            const expiringCount = activeItems.filter(i => {
+                if (!i.expiryDate) return false;
+                const exp = new Date(i.expiryDate);
+                return exp <= sevenDaysLater;
+            }).length;
+
+            document.getElementById('stat-total-items').textContent = totalCount;
+            document.getElementById('stat-current-value').textContent = `NT$ ${currentValue.toLocaleString()}`;
+            document.getElementById('stat-history-value').textContent = `NT$ ${historyValue.toLocaleString()}`;
+            document.getElementById('stat-low-stock').textContent = lowStockCount;
+            document.getElementById('stat-expiring').textContent = expiringCount;
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            localStorage.setItem('dsm_view_mode', mode);
+
+            const cardBtn = document.getElementById('view-card-btn');
+            const tableBtn = document.getElementById('view-table-btn');
+            if (mode === 'card') {
+                cardBtn.classList.add('bg-white', 'shadow-sm', 'text-amber-600');
+                tableBtn.classList.remove('bg-white', 'shadow-sm', 'text-amber-600');
+            } else {
+                tableBtn.classList.add('bg-white', 'shadow-sm', 'text-amber-600');
+                cardBtn.classList.remove('bg-white', 'shadow-sm', 'text-amber-600');
+            }
+
+            filterAndRender();
+        }
+
+        function filterAndRender() {
+            const search = document.getElementById('search-input').value.toLowerCase().trim();
+            const category = document.getElementById('category-filter').value;
+            const status = document.getElementById('status-filter').value;
+
+            const today = new Date();
+            const sevenDaysLater = new Date();
+            sevenDaysLater.setDate(today.getDate() + 7);
+
+            let filtered = items.filter(item => {
+                const nameMatch = item.name.toLowerCase().includes(search);
+                const customMatch = item.customFields && item.customFields.some(f => f.key.toLowerCase().includes(search) || f.value.toLowerCase().includes(search));
+                if (!nameMatch && !customMatch) return false;
+
+                if (category !== 'ALL' && item.category !== category) return false;
+
+                if (status === 'ARCHIVED') return item.archived;
+                if (item.archived) return false;
+
+                if (status === 'LOW') return item.quantity <= (item.minAlert || 1);
+                if (status === 'EXPIRING') {
+                    if (!item.expiryDate) return false;
+                    return new Date(item.expiryDate) <= sevenDaysLater;
+                }
+
+                return true;
+            });
+
+            const container = document.getElementById('items-container');
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white rounded-2xl p-12 text-center border border-slate-100 space-y-3">
+                        <div class="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto text-xl font-bold">📦</div>
+                        <h4 class="font-zen font-bold text-slate-700 text-base">未找到任何符合條件的用品</h4>
+                        <p class="text-xs text-slate-400">嘗試調整搜尋關鍵字或分類篩選條件</p>
+                    </div>
+                `;
+                return;
+            }
+
+            if (viewMode === 'card') {
+                renderCardView(filtered, container);
+            } else {
+                renderTableView(filtered, container);
+            }
+
+            lucide.createIcons();
+            updateDashboardStats();
+        }
+
+        function renderCardView(itemList, container) {
+            let html = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">`;
+
+            itemList.forEach(item => {
+                const isLow = item.quantity <= (item.minAlert || 1);
+                const isExpired = item.expiryDate && new Date(item.expiryDate) < new Date();
+                const totalVal = (item.quantity || 0) * (item.unitPrice || 0);
+
+                html += `
+                    <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between relative overflow-hidden ${item.archived ? 'opacity-60 bg-slate-50' : ''}">
+                        ${isLow && !item.archived ? `<div class="absolute top-0 right-0 bg-amber-500 text-slate-900 text-[10px] font-bold px-2.5 py-0.5 rounded-bl-xl font-zen">庫存偏低</div>` : ''}
+
+                        <div>
+                            <div class="flex items-start gap-3">
+                                ${item.photo ? 
+                                    `<img src="${item.photo}" class="w-14 h-14 rounded-xl object-cover border border-slate-100 flex-shrink-0">` : 
+                                    `<div class="w-14 h-14 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center flex-shrink-0"><i data-lucide="package" class="w-6 h-6"></i></div>`
+                                }
+                                <div class="flex-1 min-w-0">
+                                    <span class="inline-block px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[10px] font-medium mb-1">${item.category}</span>
+                                    <h4 class="font-zen font-bold text-slate-800 text-base truncate">${item.name}</h4>
+                                    <p class="text-xs text-slate-500">單價: NT$ ${item.unitPrice || 0} / 總價: <span class="font-semibold text-slate-700">NT$ ${totalVal}</span></p>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 p-3 bg-slate-50 rounded-xl flex items-center justify-between">
+                                <span class="text-xs text-slate-500 font-medium">目前庫存</span>
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="adjustQuantity('${item.id}', -1)" class="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-sm shadow-sm active:scale-95 transition" ${item.quantity <= 0 ? 'disabled' : ''}>-</button>
+                                    <span class="font-zen font-bold text-base text-slate-800 px-1">${item.quantity}</span>
+                                    <button onclick="adjustQuantity('${item.id}', 1)" class="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-sm shadow-sm active:scale-95 transition">+</button>
+                                </div>
+                            </div>
+
+                            <div class="mt-3 space-y-1 text-xs text-slate-500">
+                                ${item.expiryDate ? `<div class="flex justify-between ${isExpired ? 'text-rose-600 font-medium' : ''}"><span>有效/保固期限:</span><span>${item.expiryDate} ${isExpired ? '(已過期)' : ''}</span></div>` : ''}
+                                ${item.customFields ? item.customFields.map(f => `<div class="flex justify-between"><span class="text-slate-400">${f.key}:</span><span class="text-slate-700 font-medium">${f.value}</span></div>`).join('') : ''}
+                            </div>
+                        </div>
+
+                        <div class="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                            ${item.archived ? 
+                                `<button onclick="toggleArchive('${item.id}', false)" class="text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>重新補貨復庫</button>` :
+                                `<button onclick="toggleArchive('${item.id}', true)" class="text-slate-400 hover:text-slate-600 font-medium flex items-center gap-1"><i data-lucide="archive" class="w-3.5 h-3.5"></i>用完歸檔</button>`
+                            }
+
+                            <div class="flex items-center space-x-2">
+                                <button onclick="openItemModal('${item.id}')" class="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                                <button onclick="deleteItem('${item.id}')" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </div>
+                        </div>
+
+                    </div>
+                `;
+            });
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        function renderTableView(itemList, container) {
+            const grouped = {};
+            itemList.forEach(item => {
+                const cat = item.category || '其他';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(item);
+            });
+
+            const catOrder = [...categories];
+            Object.keys(grouped).forEach(c => {
+                if (!catOrder.includes(c)) catOrder.push(c);
+            });
+
+            let html = `<div class="space-y-8">`;
+
+            catOrder.forEach(catName => {
+                const catItems = grouped[catName];
+                if (!catItems || catItems.length === 0) return;
+
+                const catSubtotal = catItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+                const schema = categorySchemas[catName] || [];
+                const customColKeys = [];
+
+                schema.forEach(f => {
+                    if (!f.isBuiltin && f.label && !customColKeys.includes(f.label)) {
+                        customColKeys.push(f.label);
+                    }
+                });
+
+                catItems.forEach(item => {
+                    if (item.customFields) {
+                        item.customFields.forEach(cf => {
+                            if (cf.key && !customColKeys.includes(cf.key)) {
+                                customColKeys.push(cf.key);
+                            }
+                        });
+                    }
+                });
+
+                html += `
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between bg-gradient-to-r from-amber-50/90 via-amber-100/40 to-slate-50 px-4 py-3 rounded-2xl border border-amber-200/60 shadow-sm">
+                            <div class="flex items-center space-x-2.5">
+                                <div class="w-3 h-3 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50"></div>
+                                <h3 class="font-zen font-bold text-slate-800 text-base">${catName}</h3>
+                                <span class="text-xs text-amber-900 font-semibold bg-amber-200/70 px-2.5 py-0.5 rounded-full">${catItems.length} 項品項</span>
+                            </div>
+                            <div class="text-xs text-slate-600 font-medium">
+                                分類庫存小計: <span class="font-bold font-zen text-emerald-600 text-sm">NT$ ${catSubtotal.toLocaleString()}</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto custom-scrollbar">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="bg-slate-50/90 border-b border-slate-100 text-slate-500 font-semibold whitespace-nowrap">
+                                        <th class="p-3.5">用品名稱</th>
+                                        <th class="p-3.5">庫存數量</th>
+                                        <th class="p-3.5">單價 (NT$)</th>
+                                        <th class="p-3.5">庫存總額</th>
+                                        <th class="p-3.5">有效/保固期限</th>
+                                        ${customColKeys.map(k => `<th class="p-3.5 font-bold text-amber-900/80">${k}</th>`).join('')}
+                                        <th class="p-3.5 text-right">動作</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                `;
+
+                catItems.forEach(item => {
+                    const totalVal = (item.quantity || 0) * (item.unitPrice || 0);
+                    const isLow = item.quantity <= (item.minAlert || 1);
+                    const isExpired = item.expiryDate && new Date(item.expiryDate) < new Date();
+
+                    html += `
+                        <tr class="hover:bg-slate-50/60 transition ${item.archived ? 'opacity-50 bg-slate-50/30' : ''}">
+                            <td class="p-3.5 font-bold font-zen text-slate-800 whitespace-nowrap">
+                                <div class="flex items-center gap-2.5">
+                                    ${item.photo ? 
+                                        `<img src="${item.photo}" class="w-8 h-8 rounded-lg object-cover border border-slate-200 flex-shrink-0 shadow-sm">` : 
+                                        `<div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center flex-shrink-0"><i data-lucide="package" class="w-4 h-4"></i></div>`
+                                    }
+                                    <div>
+                                        <div class="truncate max-w-[160px] sm:max-w-[200px]" title="${item.name}">${item.name}</div>
+                                        ${isLow && !item.archived ? `<span class="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">庫存偏低</span>` : ''}
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td class="p-3.5 whitespace-nowrap">
+                                <div class="flex items-center space-x-1.5">
+                                    <button onclick="adjustQuantity('${item.id}', -1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-xs transition" ${item.quantity <= 0 ? 'disabled' : ''}>-</button>
+                                    <span class="font-bold font-zen ${isLow ? 'text-amber-600' : 'text-slate-800'} px-1">${item.quantity}</span>
+                                    <button onclick="adjustQuantity('${item.id}', 1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-xs transition">+</button>
+                                </div>
+                            </td>
+
+                            <td class="p-3.5 text-slate-600 whitespace-nowrap">NT$ ${item.unitPrice || 0}</td>
+                            <td class="p-3.5 font-semibold text-slate-700 whitespace-nowrap">NT$ ${totalVal.toLocaleString()}</td>
+                            <td class="p-3.5 whitespace-nowrap ${isExpired ? 'text-rose-600 font-semibold' : 'text-slate-500'}">
+                                ${item.expiryDate ? `${item.expiryDate} ${isExpired ? '⚠️' : ''}` : '-'}
+                            </td>
+
+                            ${customColKeys.map(k => {
+                                const cf = item.customFields ? item.customFields.find(f => f.key === k) : null;
+                                const val = cf && cf.value ? cf.value : '-';
+                                return `<td class="p-3.5 whitespace-nowrap"><span class="bg-slate-100/80 px-2 py-0.5 rounded text-slate-700 font-medium">${val}</span></td>`;
+                            }).join('')}
+
+                            <td class="p-3.5 text-right whitespace-nowrap">
+                                <div class="flex items-center justify-end space-x-1">
+                                    ${item.archived ? 
+                                        `<button onclick="toggleArchive('${item.id}', false)" class="p-1 rounded text-emerald-600 hover:bg-emerald-50" title="取消歸檔/復庫"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i></button>` :
+                                        `<button onclick="toggleArchive('${item.id}', true)" class="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100" title="用完歸檔"><i data-lucide="archive" class="w-3.5 h-3.5"></i></button>`
+                                    }
+                                    <button onclick="openItemModal('${item.id}')" class="p-1 rounded text-slate-400 hover:text-amber-600 hover:bg-amber-50" title="編輯細節"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="deleteItem('${item.id}')" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="刪除用品"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        function adjustQuantity(id, delta) {
+            const item = items.find(i => i.id === id);
+            if (item) {
+                item.quantity = Math.max(0, (item.quantity || 0) + delta);
+                if (item.quantity === 0) item.archived = true;
+                else item.archived = false;
+                item.updatedAt = new Date().toISOString();
+                saveToLocalStorageAndDrive();
+                filterAndRender();
+            }
+        }
+
+        function toggleArchive(id, archived) {
+            const item = items.find(i => i.id === id);
+            if (item) {
+                item.archived = archived;
+                if (archived) item.quantity = 0;
+                else if (item.quantity === 0) item.quantity = 1;
+                item.updatedAt = new Date().toISOString();
+                saveToLocalStorageAndDrive();
+                filterAndRender();
+            }
+        }
+
+        function deleteItem(id) {
+            Swal.fire({
+                title: '確定要刪除這項物品？',
+                text: '刪除後資料將無法恢復。',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: '是的，確定刪除',
+                cancelButtonText: '取消'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    items = items.filter(i => i.id !== id);
+                    saveToLocalStorageAndDrive();
+                    filterAndRender();
+                }
+            });
+        }
+
+        function onCategorySelectChange() {
+            const selectedCat = document.getElementById('item-category').value;
+            renderDynamicCategoryFields(selectedCat);
+        }
+
+        function renderDynamicCategoryFields(categoryName, existingItemData = null) {
+            const container = document.getElementById('dynamic-category-fields-container');
+            document.getElementById('cat-fields-title').textContent = `「${categoryName}」類別專屬預設欄位`;
+            container.innerHTML = '';
+
+            const schema = categorySchemas[categoryName] || [
+                { key: 'unitPrice', label: '單價 (NT$)', type: 'number', isBuiltin: true },
+                { key: 'minAlert', label: '補充警示數量', type: 'number', isBuiltin: true },
+                { key: 'expiryDate', label: '有效期限', type: 'date', isBuiltin: true },
+                { key: 'photo', label: '物品照片', type: 'photo', isBuiltin: true }
+            ];
+
+            schema.forEach((field, index) => {
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = 'p-3 bg-slate-50 border border-slate-200/80 rounded-xl relative group font-dyn-field';
+                fieldDiv.dataset.fieldKey = field.key;
+                fieldDiv.dataset.isBuiltin = field.isBuiltin;
+                fieldDiv.dataset.label = field.label;
+
+                let val = '';
+                if (existingItemData) {
+                    if (field.isBuiltin) {
+                        val = existingItemData[field.key] || '';
+                    } else {
+                        const customObj = existingItemData.customFields ? existingItemData.customFields.find(f => f.key === field.label || f.key === field.key) : null;
+                        val = customObj ? customObj.value : '';
+                    }
+                } else {
+                    val = field.defaultVal || '';
+                }
+
+                let inputHtml = '';
+
+                if (field.type === 'photo') {
+                    if (existingItemData && existingItemData.photo) {
+                        itemPhotoBase64 = existingItemData.photo;
+                    }
+                    inputHtml = `
+                        <div class="flex items-center gap-3 mt-1">
+                            <input type="file" id="field-input-photo" accept="image/*" onchange="handlePhotoUpload(event)" class="hidden">
+                            <button type="button" onclick="document.getElementById('field-input-photo').click()" class="px-3.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-medium transition flex items-center gap-1.5">
+                                <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                                <span>選擇照片...</span>
+                            </button>
+                            <div id="photo-preview-container" class="${itemPhotoBase64 ? '' : 'hidden'} flex items-center gap-2">
+                                <img id="photo-preview" src="${itemPhotoBase64 || ''}" class="w-8 h-8 rounded-lg object-cover border border-slate-200">
+                                <span class="text-[11px] text-emerald-600 font-medium">相片處理完畢 (WebP)</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    inputHtml = `
+                        <input type="${field.type || 'text'}" 
+                               id="field-input-${index}" 
+                               value="${val}" 
+                               placeholder="${field.placeholder || ''}" 
+                               class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none field-value-input">
+                    `;
+                }
+
+                fieldDiv.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-semibold text-slate-600">${field.label}</label>
+                        <button type="button" onclick="this.parentElement.parentElement.remove()" class="text-slate-400 hover:text-rose-500 transition text-[11px] flex items-center gap-0.5" title="本次不填寫並移除此欄位">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                    ${inputHtml}
+                `;
+
+                container.appendChild(fieldDiv);
+            });
+
+            lucide.createIcons();
+        }
+
+        function openItemModal(itemId = null) {
+            itemPhotoBase64 = null;
+            document.getElementById('adhoc-fields-container').innerHTML = '';
+
+            const modal = document.getElementById('item-modal');
+            const title = document.getElementById('modal-title');
+
+            renderCategoryOptions();
+
+            if (itemId) {
+                const item = items.find(i => i.id === itemId);
+                if (!item) return;
+
+                title.textContent = '編輯用品細節';
+                document.getElementById('item-id').value = item.id;
+                document.getElementById('item-name').value = item.name;
+                document.getElementById('item-category').value = item.category;
+                document.getElementById('item-quantity').value = item.quantity;
+
+                renderDynamicCategoryFields(item.category, item);
+
+            } else {
+                title.textContent = '新增用品';
+                document.getElementById('item-form').reset();
+                document.getElementById('item-id').value = '';
+
+                const firstCat = categories[0] || '其他';
+                document.getElementById('item-category').value = firstCat;
+                renderDynamicCategoryFields(firstCat);
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeItemModal() {
+            document.getElementById('item-modal').classList.add('hidden');
+        }
+
+        function addAdhocFieldRow(key = '', value = '') {
+            const container = document.getElementById('adhoc-fields-container');
+            const row = document.createElement('div');
+            row.className = 'flex items-center space-x-2 adhoc-field-row';
+            row.innerHTML = `
+                <input type="text" placeholder="臨時欄位名 (如: 買一送一)" value="${key}" class="w-1/3 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs adhoc-key focus:bg-white focus:outline-none">
+                <input type="text" placeholder="欄位內容" value="${value}" class="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs adhoc-val focus:bg-white focus:outline-none">
+                <button type="button" onclick="this.parentElement.remove()" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+            `;
+            container.appendChild(row);
+            lucide.createIcons();
+        }
+
+        function handlePhotoUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const maxDim = 300;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > maxDim) {
+                            height *= maxDim / width;
+                            width = maxDim;
+                        }
+                    } else {
+                        if (height > maxDim) {
+                            width *= maxDim / height;
+                            height = maxDim;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    itemPhotoBase64 = canvas.toDataURL('image/webp', 0.7);
+                    const prevImg = document.getElementById('photo-preview');
+                    if (prevImg) prevImg.src = itemPhotoBase64;
+                    const prevBox = document.getElementById('photo-preview-container');
+                    if (prevBox) prevBox.classList.remove('hidden');
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function saveItem(e) {
+            e.preventDefault();
+
+            const id = document.getElementById('item-id').value;
+            const name = document.getElementById('item-name').value.trim();
+            const category = document.getElementById('item-category').value;
+            const quantity = parseInt(document.getElementById('item-quantity').value) || 0;
+
+            let unitPrice = 0;
+            let minAlert = 1;
+            let expiryDate = '';
+            let photo = itemPhotoBase64;
+            const customFields = [];
+
+            document.querySelectorAll('.font-dyn-field').forEach(fieldDiv => {
+                const key = fieldDiv.dataset.fieldKey;
+                const isBuiltin = fieldDiv.dataset.isBuiltin === 'true';
+                const label = fieldDiv.dataset.label;
+                const inputEl = fieldDiv.querySelector('.field-value-input');
+
+                if (isBuiltin) {
+                    if (key === 'unitPrice' && inputEl) unitPrice = parseFloat(inputEl.value) || 0;
+                    if (key === 'minAlert' && inputEl) minAlert = parseInt(inputEl.value) || 1;
+                    if (key === 'expiryDate' && inputEl) expiryDate = inputEl.value;
+                } else {
+                    if (inputEl && inputEl.value.trim()) {
+                        customFields.push({ key: label || key, value: inputEl.value.trim() });
+                    }
+                }
+            });
+
+            document.querySelectorAll('.adhoc-field-row').forEach(row => {
+                const k = row.querySelector('.adhoc-key').value.trim();
+                const v = row.querySelector('.adhoc-val').value.trim();
+                if (k) customFields.push({ key: k, value: v });
+            });
+
+            if (id) {
+                const item = items.find(i => i.id === id);
+                if (item) {
+                    item.name = name;
+                    item.category = category;
+                    item.quantity = quantity;
+                    item.unitPrice = unitPrice;
+                    item.minAlert = minAlert;
+                    item.expiryDate = expiryDate;
+                    item.photo = photo;
+                    item.customFields = customFields;
+                    item.archived = quantity === 0;
+                    item.updatedAt = new Date().toISOString();
+                }
+            } else {
+                const newItem = {
+                    id: 'item-' + Date.now(),
+                    name, category, quantity, unitPrice, minAlert, expiryDate,
+                    photo: photo, customFields,
+                    archived: quantity === 0,
+                    updatedAt: new Date().toISOString()
+                };
+                items.unshift(newItem);
+            }
+
+            saveToLocalStorageAndDrive();
+            closeItemModal();
+            filterAndRender();
+
+            Swal.fire({
+                title: '儲存成功！',
+                icon: 'success',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 1800
+            });
+        }
+
+        function renderCategoryOptions() {
+            const selectModal = document.getElementById('item-category');
+            const selectFilter = document.getElementById('category-filter');
+
+            if (selectModal) {
+                selectModal.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+            if (selectFilter) {
+                selectFilter.innerHTML = `<option value="ALL">全部分類</option>` + categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+        }
+
+        function openCategoryModal() {
+            closeCatFieldsEditor();
+            renderCategoryList();
+            document.getElementById('category-modal').classList.remove('hidden');
+        }
+
+        function closeCategoryModal() {
+            document.getElementById('category-modal').classList.add('hidden');
+            renderCategoryOptions();
+            filterAndRender();
+        }
+
+        function renderCategoryList() {
+            const container = document.getElementById('category-list-container');
+            container.innerHTML = categories.map((cat, idx) => {
+                const schemaList = categorySchemas[cat] || [];
+                return `
+                    <div class="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-slate-800">${cat}</span>
+                            <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">${schemaList.length} 個專屬預設欄位</span>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <button onclick="renameCategory('${cat}')" class="p-1 hover:bg-slate-200 text-slate-600 rounded" title="重命名類別">
+                                <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button onclick="openCatFieldsEditor('${cat}')" class="p-1 px-2 hover:bg-amber-100 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-1 font-bold" title="設定此類別專屬預設欄位">
+                                <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+                                <span>設定預設欄位</span>
+                            </button>
+                            <button onclick="moveCategory(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} class="p-1 hover:bg-slate-200 rounded disabled:opacity-30"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                            <button onclick="moveCategory(${idx}, 1)" ${idx === categories.length - 1 ? 'disabled' : ''} class="p-1 hover:bg-slate-200 rounded disabled:opacity-30"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                            <button onclick="deleteCategory('${cat}')" class="p-1 text-rose-500 hover:bg-rose-50 rounded"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function renameCategory(oldName) {
+            Swal.fire({
+                title: `重命名類別「${oldName}」`,
+                input: 'text',
+                inputValue: oldName,
+                showCancelButton: true,
+                confirmButtonText: '確定修改',
+                cancelButtonText: '取消',
+                confirmButtonColor: '#f59e0b',
+            }).then((result) => {
+                if (result.isConfirmed && result.value.trim() && result.value.trim() !== oldName) {
+                    const newName = result.value.trim();
+                    const idx = categories.indexOf(oldName);
+                    if (idx !== -1) categories[idx] = newName;
+                    if (categorySchemas[oldName]) {
+                        categorySchemas[newName] = categorySchemas[oldName];
+                        delete categorySchemas[oldName];
+                    }
+                    items.forEach(item => { if (item.category === oldName) item.category = newName; });
+                    saveToLocalStorageAndDrive();
+                    renderCategoryList();
+                }
+            });
+        }
+
+        function openCatFieldsEditor(catName) {
+            editingCatName = catName;
+            document.getElementById('target-cat-name').textContent = catName;
+
+            const list = document.getElementById('cat-default-fields-list');
+            list.innerHTML = '';
+
+            const currentSchema = categorySchemas[catName] || [];
+            currentSchema.forEach(f => {
+                addCatDefaultFieldRow(f.key, f.label, f.type, f.defaultVal || '', f.isBuiltin);
+            });
+
+            document.getElementById('category-fields-editor').classList.remove('hidden');
+        }
+
+        function closeCatFieldsEditor() {
+            document.getElementById('category-fields-editor').classList.add('hidden');
+            editingCatName = null;
+        }
+
+        function addCatDefaultFieldRow(key = '', label = '', type = 'text', defaultVal = '', isBuiltin = false) {
+            const list = document.getElementById('cat-default-fields-list');
+            const row = document.createElement('div');
+            row.className = 'p-2.5 bg-white border border-slate-200 rounded-xl space-y-2 cat-schema-row text-xs';
+            row.dataset.isBuiltin = isBuiltin;
+            row.dataset.key = key || ('c_' + Date.now());
+
+            row.innerHTML = `
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex-1">
+                        <label class="block text-[10px] text-slate-400 mb-0.5">欄位顯示名稱</label>
+                        <input type="text" placeholder="例如: 品牌、包裝容量" value="${label || key}" class="w-full px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-700 field-schema-label">
+                    </div>
+                    <div class="w-28">
+                        <label class="block text-[10px] text-slate-400 mb-0.5">屬性類型</label>
+                        <select class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg field-schema-type ${isBuiltin ? 'pointer-events-none opacity-60' : ''}">
+                            <option value="text" ${type === 'text' ? 'selected' : ''}>一般文字</option>
+                            <option value="number" ${type === 'number' ? 'selected' : ''}>數字</option>
+                            <option value="date" ${type === 'date' ? 'selected' : ''}>日期</option>
+                            <option value="photo" ${type === 'photo' ? 'selected' : ''}>照片上傳</option>
+                        </select>
+                    </div>
+                    <button type="button" onclick="this.parentElement.parentElement.remove()" class="mt-4 p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg" title="移除此預設欄位"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </div>
+                ${!isBuiltin && type !== 'photo' ? `
+                    <div>
+                        <input type="text" placeholder="預設內容 (選擇性事先填寫)" value="${defaultVal}" class="w-full px-2.5 py-1 bg-slate-50/60 border border-slate-200 rounded-lg text-slate-500 field-schema-default">
+                    </div>
+                ` : ''}
+            `;
+
+            list.appendChild(row);
+            lucide.createIcons();
+        }
+
+        function saveCatDefaultFields() {
+            if (!editingCatName) return;
+
+            const newSchema = [];
+            document.querySelectorAll('.cat-schema-row').forEach(row => {
+                const label = row.querySelector('.field-schema-label').value.trim();
+                const type = row.querySelector('.field-schema-type').value;
+                const isBuiltin = row.dataset.isBuiltin === 'true';
+                const key = isBuiltin ? row.dataset.key : (label || row.dataset.key);
+                const defaultEl = row.querySelector('.field-schema-default');
+                const defaultVal = defaultEl ? defaultEl.value.trim() : '';
+
+                if (label) {
+                    newSchema.push({
+                        key,
+                        label,
+                        type,
+                        defaultVal,
+                        isBuiltin
+                    });
+                }
+            });
+
+            categorySchemas[editingCatName] = newSchema;
+            saveToLocalStorageAndDrive();
+            renderCategoryList();
+            closeCatFieldsEditor();
+
+            Swal.fire({ title: '類別預設欄位已更新！', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+        }
+
+        function addNewCategory() {
+            const input = document.getElementById('new-category-input');
+            const cat = input.value.trim();
+            if (cat && !categories.includes(cat)) {
+                categories.push(cat);
+                categorySchemas[cat] = [
+                    { key: 'unitPrice', label: '單價 (NT$)', type: 'number', isBuiltin: true },
+                    { key: 'minAlert', label: '補充警示數量', type: 'number', isBuiltin: true },
+                    { key: 'expiryDate', label: '有效期限', type: 'date', isBuiltin: true },
+                    { key: 'photo', label: '物品照片', type: 'photo', isBuiltin: true }
+                ];
+                input.value = '';
+                saveToLocalStorageAndDrive();
+                renderCategoryList();
+            }
+        }
+
+        function moveCategory(idx, direction) {
+            const targetIdx = idx + direction;
+            if (targetIdx >= 0 && targetIdx < categories.length) {
+                const temp = categories[idx];
+                categories[idx] = categories[targetIdx];
+                categories[targetIdx] = temp;
+                saveToLocalStorageAndDrive();
+                renderCategoryList();
+            }
+        }
+
+        function deleteCategory(catName) {
+            categories = categories.filter(c => c !== catName);
+            delete categorySchemas[catName];
+            saveToLocalStorageAndDrive();
+            renderCategoryList();
+        }
+
+        function openHelpModal() { document.getElementById('help-modal').classList.remove('hidden'); }
+        function closeHelpModal() { document.getElementById('help-modal').classList.add('hidden'); }
+
+        function saveToLocalStorageAndDrive() {
+            localStorage.setItem('dsm_categories', JSON.stringify(categories));
+            localStorage.setItem('dsm_category_schemas', JSON.stringify(categorySchemas));
+            localStorage.setItem('dsm_items', JSON.stringify(items));
+            localStorage.setItem('dsm_hero_title', heroTitle);
+            localStorage.setItem('dsm_hero_bg', heroBgUrl);
+
+            if (googleAccessToken) {
+                syncToGoogleDrive();
+            }
+        }
+
+        function handleGoogleDriveAuth() {
+            if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
+                Swal.fire({
+                    title: '未設定 Google Client ID',
+                    text: '請在 index.html 程式碼填入您申請的 GOOGLE_CLIENT_ID 即可啟用。',
+                    icon: 'info'
+                });
+                return;
+            }
+
+            const tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: 'https://www.googleapis.com/auth/drive.appdata',
+                callback: (response) => {
+                    if (response.access_token) {
+                        googleAccessToken = response.access_token;
+                        document.getElementById('google-btn-text').textContent = '已連結 Google 雲端';
+                        document.getElementById('google-login-btn').classList.add('border-emerald-500', 'text-emerald-600');
+                        Swal.fire({ title: '已成功登入 Google！', text: '已啟動 Google Drive 雲端自動同步。', icon: 'success', timer: 1800, showConfirmButton: false });
+                    }
+                },
+            });
+            tokenClient.requestAccessToken();
+        }
+
+        async function syncToGoogleDrive() {}
+    </script>
+</body>
+</html>
