@@ -8,8 +8,9 @@
 - 有效期限提醒
 - 表格 / 卡片雙檢視模式
 - 首頁標題與背景自訂
-- Google Drive 同步入口（需要 Google Client ID）
-- LocalStorage 本地持久化
+- Google 帳號登入後才能進入系統
+- Google Drive appData 雲端同步與帳號分區
+- LocalStorage 帳號分區快取
 
 ## 使用方式
 
@@ -50,10 +51,10 @@ http://localhost:8000
 http://localhost:8000
 ```
 
-如果你要部署到 GitHub Pages 或正式網站，也可加入：
+如果你要部署到 GitHub Pages 或正式網站，請加入「origin」，只填協定與主機名稱，不包含專案路徑或結尾斜線：
 
 ```text
-https://你的帳號.github.io/你的專案名稱/
+https://你的帳號.github.io
 ```
 
 ### 3. 填入 Client ID
@@ -72,13 +73,14 @@ const GOOGLE_CLIENT_ID = '1234567890-abcdefghijklmno.apps.googleusercontent.com'
 
 ### 4. 授權範圍
 
-本專案使用：
+本專案使用以下 OAuth scopes 取得 Google 帳號識別並存取應用程式專屬 Drive 資料：
 
 ```text
+openid email profile
 https://www.googleapis.com/auth/drive.appdata
 ```
 
-這樣可以將資料儲存在 Google Drive 的 appData 資料夾中，僅供你的應用程式使用。
+登入後才能使用管理介面。每個 Google 帳號的庫存、分類、欄位、首頁設定與檢視模式會分開儲存在該帳號的 Drive appData 和本機快取中。登入偏好會保留；重新整理時會嘗試向 Google 靜默取得新的短效 token，不會把 access token 存入 LocalStorage。若 Google 工作階段失效，仍需重新登入。
 
 ## GitHub 部署方式
 
@@ -119,8 +121,8 @@ git push -u origin main
 
 ## 重要提醒
 
-- Google Drive 同步功能需要你自行設定 Google OAuth Client ID，這個頁面已經預留入口。
-- 如果不需要 Google Drive，同樣可以直接使用本地儲存功能。
+- OAuth Client 必須是 Web application，並設定正確的 Authorized JavaScript origins。
+- GitHub Pages 是純靜態託管；長期登入依賴瀏覽器仍有有效的 Google 工作階段與授權。若要使用伺服器端 refresh token，需要另外建置安全的後端，不能將 refresh token 放在前端。
 
 ## 檔案說明
 

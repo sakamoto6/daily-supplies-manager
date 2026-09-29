@@ -119,6 +119,7 @@
                     </svg>
                     <span id="google-btn-text">Google 登入同步</span>
                 </button>
+                <span id="google-account-email" class="hidden max-w-36 truncate text-xs text-slate-500" title="已登入的 Google 帳號"></span>
                 <button id="google-logout-btn" onclick="logoutGoogleDrive()" class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-100 transition" title="登出 Google 並解除雲端連結">
                     <i data-lucide="log-out" class="w-4 h-4"></i>
                     <span class="hidden sm:inline">登出 Google</span>
@@ -127,7 +128,22 @@
         </div>
     </header>
 
-    <section id="hero-section" class="hero-bg-default flex-1 flex items-center justify-center relative overflow-hidden px-4 py-20 min-h-[calc(100vh-4rem)]">
+    <div id="login-required-overlay" class="fixed inset-x-0 bottom-0 top-16 z-50 flex items-center justify-center bg-slate-50/95 px-5 py-8 backdrop-blur-md">
+        <div class="w-full max-w-md space-y-5 text-center">
+            <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-3xl">🐹</div>
+            <div class="space-y-2">
+                <h2 class="font-zen text-2xl font-bold text-slate-800">登入 Google 才能使用個人倉庫</h2>
+                <p class="text-sm leading-6 text-slate-600">你的庫存、分類與首頁設定會依 Google 帳號分開儲存，並同步至該帳號的 Google Drive。</p>
+            </div>
+            <button onclick="handleGoogleDriveAuth()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 font-zen font-bold text-slate-900 shadow-md transition hover:bg-amber-600">
+                <i data-lucide="log-in" class="h-4 w-4"></i>
+                使用 Google 登入
+            </button>
+            <p id="login-gate-status" class="min-h-5 text-xs text-slate-500" aria-live="polite"></p>
+        </div>
+    </div>
+
+    <section id="hero-section" inert aria-hidden="true" class="hero-bg-default flex-1 flex items-center justify-center relative overflow-hidden px-4 py-20 min-h-[calc(100vh-4rem)]">
         <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-slate-900/40 z-0"></div>
 
         <div class="absolute top-4 right-4 z-20">
@@ -155,7 +171,7 @@
         </div>
     </section>
 
-    <main id="app-section" class="hidden flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <main id="app-section" inert aria-hidden="true" class="hidden flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
             <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition">
                 <div class="flex items-center justify-between text-slate-500">
@@ -446,21 +462,24 @@
         const GOOGLE_LOGIN_PREFERENCE_KEY = 'dsm_google_login_preferred';
 
         let currentSection = 'hero';
-        let viewMode = localStorage.getItem('dsm_view_mode') || 'card';
+        let viewMode = 'card';
         let googleAccessToken = null;
+        let activeGoogleAccount = null;
         let googleRestoreStarted = false;
+        let googleRestoreTimeout = null;
+        let migratedLegacyDataToAccount = false;
         let itemPhotoBase64 = null;
         let heroBgBase64 = null;
         let editingCatName = null;
 
-        let heroTitle = localStorage.getItem('dsm_hero_title') || '嗨!嚴方筠';
-        let heroBgUrl = localStorage.getItem('dsm_hero_bg') || 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?q=80&w=1920&auto=format&fit=crop';
+        let heroTitle = '嗨!嚴方筠';
+        let heroBgUrl = 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?q=80&w=1920&auto=format&fit=crop';
 
-        let categories = JSON.parse(localStorage.getItem('dsm_categories')) || [
+        let categories = [
             '食品/零食', '美妝/保養', '藥品/保健', '清潔/日用', '3C/家電', '其他'
         ];
 
-        let categorySchemas = JSON.parse(localStorage.getItem('dsm_category_schemas')) || {
+        let categorySchemas = {
             '食品/零食': [
                 { key: 'unitPrice', label: '單價 (NT$)', type: 'number', placeholder: '例如: 150', isBuiltin: true },
                 { key: 'minAlert', label: '補充警示數量', type: 'number', placeholder: '1', isBuiltin: true },
@@ -506,7 +525,7 @@
             ]
         };
 
-        let items = JSON.parse(localStorage.getItem('dsm_items')) || [
+        let items = [
             {
                 id: 'item-1',
                 name: '日系黑咖啡豆 (250g)',
@@ -522,12 +541,22 @@
             }
         ];
 
+        const initialAppData = {
+            categories: JSON.parse(JSON.stringify(categories)),
+            categorySchemas: JSON.parse(JSON.stringify(categorySchemas)),
+            items: JSON.parse(JSON.stringify(items)),
+            heroTitle,
+            heroBgUrl,
+            viewMode
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             applyHeroSettingsUI();
             renderCategoryOptions();
             filterAndRender();
             updateDashboardStats();
+            setGoogleConnState(false);
             setViewMode(viewMode);
             if (localStorage.getItem(GOOGLE_LOGIN_PREFERENCE_KEY) === 'true') {
                 if (window.google?.accounts?.oauth2) {
@@ -549,6 +578,7 @@
         }
 
         function openHeroSettingsModal() {
+            if (!activeGoogleAccount) return;
             document.getElementById('hero-title-input').value = heroTitle;
             document.getElementById('hero-bg-input').value = heroBgUrl.startsWith('data:') ? '' : heroBgUrl;
             document.getElementById('hero-settings-modal').classList.remove('hidden');
@@ -600,9 +630,6 @@
                 heroBgUrl = newBgUrl;
             }
 
-            localStorage.setItem('dsm_hero_title', heroTitle);
-            localStorage.setItem('dsm_hero_bg', heroBgUrl);
-
             applyHeroSettingsUI();
             closeHeroSettingsModal();
             saveToLocalStorageAndDrive();
@@ -611,6 +638,7 @@
         }
 
         function switchViewSection(target) {
+            if (!activeGoogleAccount) return;
             currentSection = target;
             const hero = document.getElementById('hero-section');
             const app = document.getElementById('app-section');
@@ -653,9 +681,10 @@
             document.getElementById('stat-expiring').textContent = expiringCount;
         }
 
-        function setViewMode(mode) {
+        function setViewMode(mode, persist = true) {
             viewMode = mode;
-            localStorage.setItem('dsm_view_mode', mode);
+            const storageKey = accountStorageKey('view_mode');
+            if (storageKey) localStorage.setItem(storageKey, mode);
 
             const cardBtn = document.getElementById('view-card-btn');
             const tableBtn = document.getElementById('view-table-btn');
@@ -667,6 +696,7 @@
                 cardBtn.classList.remove('bg-white', 'shadow-sm', 'text-amber-600');
             }
 
+            if (persist && googleAccessToken) syncToGoogleDrive();
             filterAndRender();
         }
 
@@ -1406,40 +1436,122 @@
             renderCategoryList();
         }
 
-        function openHelpModal() { document.getElementById('help-modal').classList.remove('hidden'); }
+        function openHelpModal() {
+            if (!activeGoogleAccount) return;
+            document.getElementById('help-modal').classList.remove('hidden');
+        }
         function closeHelpModal() { document.getElementById('help-modal').classList.add('hidden'); }
 
+        function accountStorageKey(key, accountId = activeGoogleAccount?.sub) {
+            if (!accountId) return null;
+            return `dsm_account_${encodeURIComponent(accountId)}_${key}`;
+        }
+
+        function readStoredJson(key, fallback) {
+            const value = localStorage.getItem(key);
+            if (!value) return fallback;
+            try {
+                return JSON.parse(value);
+            } catch (error) {
+                console.warn(`無法讀取本機資料 ${key}`, error);
+                return fallback;
+            }
+        }
+
+        function persistAccountDataLocally() {
+            if (!activeGoogleAccount) return;
+            localStorage.setItem(accountStorageKey('initialized'), 'true');
+            localStorage.setItem(accountStorageKey('categories'), JSON.stringify(categories));
+            localStorage.setItem(accountStorageKey('category_schemas'), JSON.stringify(categorySchemas));
+            localStorage.setItem(accountStorageKey('items'), JSON.stringify(items));
+            localStorage.setItem(accountStorageKey('hero_title'), heroTitle);
+            localStorage.setItem(accountStorageKey('hero_bg'), heroBgUrl);
+            localStorage.setItem(accountStorageKey('view_mode'), viewMode);
+        }
+
+        function loadAccountDataLocally(accountId) {
+            const initializedKey = accountStorageKey('initialized', accountId);
+            migratedLegacyDataToAccount = false;
+            if (localStorage.getItem(initializedKey) === 'true') {
+                categories = readStoredJson(accountStorageKey('categories', accountId), initialAppData.categories);
+                categorySchemas = readStoredJson(accountStorageKey('category_schemas', accountId), initialAppData.categorySchemas);
+                items = readStoredJson(accountStorageKey('items', accountId), initialAppData.items);
+                heroTitle = localStorage.getItem(accountStorageKey('hero_title', accountId)) || initialAppData.heroTitle;
+                heroBgUrl = localStorage.getItem(accountStorageKey('hero_bg', accountId)) || initialAppData.heroBgUrl;
+                viewMode = localStorage.getItem(accountStorageKey('view_mode', accountId)) || initialAppData.viewMode;
+                return;
+            }
+
+            migratedLegacyDataToAccount = ['dsm_categories', 'dsm_category_schemas', 'dsm_items', 'dsm_hero_title', 'dsm_hero_bg', 'dsm_view_mode']
+                .some(key => localStorage.getItem(key) !== null);
+            categories = readStoredJson('dsm_categories', initialAppData.categories);
+            categorySchemas = readStoredJson('dsm_category_schemas', initialAppData.categorySchemas);
+            items = readStoredJson('dsm_items', initialAppData.items);
+            heroTitle = localStorage.getItem('dsm_hero_title') || initialAppData.heroTitle;
+            heroBgUrl = localStorage.getItem('dsm_hero_bg') || initialAppData.heroBgUrl;
+            viewMode = localStorage.getItem('dsm_view_mode') || initialAppData.viewMode;
+
+            persistAccountDataLocally();
+            ['dsm_categories', 'dsm_category_schemas', 'dsm_items', 'dsm_hero_title', 'dsm_hero_bg', 'dsm_view_mode', GOOGLE_DRIVE_FILE_KEY]
+                .forEach(key => localStorage.removeItem(key));
+        }
+
+        function resetAccountDataInMemory() {
+            categories = JSON.parse(JSON.stringify(initialAppData.categories));
+            categorySchemas = JSON.parse(JSON.stringify(initialAppData.categorySchemas));
+            items = JSON.parse(JSON.stringify(initialAppData.items));
+            heroTitle = initialAppData.heroTitle;
+            heroBgUrl = initialAppData.heroBgUrl;
+            viewMode = initialAppData.viewMode;
+            applyHeroSettingsUI();
+            renderCategoryOptions();
+            filterAndRender();
+            updateDashboardStats();
+        }
+
         function saveToLocalStorageAndDrive() {
-            localStorage.setItem('dsm_categories', JSON.stringify(categories));
-            localStorage.setItem('dsm_category_schemas', JSON.stringify(categorySchemas));
-            localStorage.setItem('dsm_items', JSON.stringify(items));
-            localStorage.setItem('dsm_hero_title', heroTitle);
-            localStorage.setItem('dsm_hero_bg', heroBgUrl);
+            if (!activeGoogleAccount) return;
+            persistAccountDataLocally();
 
             if (googleAccessToken) {
                 syncToGoogleDrive();
             }
         }
 
-        function setGoogleConnState(isConnected) {
+        function setGoogleConnState(isConnected, email = '') {
             const btnText = document.getElementById('google-btn-text');
             const btn = document.getElementById('google-login-btn');
+            const accountEmail = document.getElementById('google-account-email');
             const logoutBtn = document.getElementById('google-logout-btn');
-            if (!btnText || !btn || !logoutBtn) return;
+            const loginOverlay = document.getElementById('login-required-overlay');
+            if (!btnText || !btn || !accountEmail || !logoutBtn || !loginOverlay) return;
 
             btnText.textContent = isConnected ? '已連結 Google 雲端' : 'Google 登入同步';
             btn.classList.toggle('border-emerald-500', isConnected);
             btn.classList.toggle('text-emerald-600', isConnected);
+            btn.classList.toggle('hidden', isConnected);
+            accountEmail.textContent = email;
+            accountEmail.title = email || '已登入的 Google 帳號';
+            accountEmail.classList.toggle('hidden', !isConnected || !email);
             logoutBtn.classList.toggle('hidden', !isConnected);
+            loginOverlay.classList.toggle('hidden', isConnected);
+            const heroSection = document.getElementById('hero-section');
+            const appSection = document.getElementById('app-section');
+            heroSection.toggleAttribute('inert', !isConnected);
+            heroSection.setAttribute('aria-hidden', String(!isConnected));
+            appSection.toggleAttribute('inert', !isConnected);
+            appSection.setAttribute('aria-hidden', String(!isConnected));
         }
 
         function buildDriveBackupPayload() {
             return {
+                accountId: activeGoogleAccount?.sub,
                 categories,
                 categorySchemas,
                 items,
                 heroTitle,
                 heroBgUrl,
+                viewMode,
                 updatedAt: new Date().toISOString(),
                 version: 1
             };
@@ -1473,7 +1585,7 @@
             const targetFile = files.find(file => file.name === GOOGLE_DRIVE_FILE_NAME);
             if (!targetFile) return false;
 
-            localStorage.setItem(GOOGLE_DRIVE_FILE_KEY, targetFile.id);
+            localStorage.setItem(accountStorageKey(GOOGLE_DRIVE_FILE_KEY), targetFile.id);
 
             const response = await fetch(`https://www.googleapis.com/drive/v3/files/${targetFile.id}?alt=media`, {
                 headers: {
@@ -1488,16 +1600,36 @@
 
             const data = await response.json();
             if (!data || typeof data !== 'object') return false;
+            if (data.accountId && data.accountId !== activeGoogleAccount?.sub) {
+                throw new Error('Google Drive 備份帳號不符，已停止載入以避免混用資料。');
+            }
 
-            if (Array.isArray(data.items)) items = data.items;
-            if (Array.isArray(data.categories)) categories = data.categories;
-            if (data.categorySchemas) categorySchemas = data.categorySchemas;
+            if (Array.isArray(data.items)) {
+                const driveItems = data.items;
+                items = migratedLegacyDataToAccount
+                    ? [...driveItems, ...items.filter(localItem => !driveItems.some(driveItem => driveItem.id === localItem.id))]
+                    : driveItems;
+            }
+            if (Array.isArray(data.categories)) {
+                const driveCategories = data.categories;
+                categories = migratedLegacyDataToAccount
+                    ? [...driveCategories, ...categories.filter(localCategory => !driveCategories.includes(localCategory))]
+                    : driveCategories;
+            }
+            if (data.categorySchemas) {
+                categorySchemas = migratedLegacyDataToAccount
+                    ? { ...categorySchemas, ...data.categorySchemas }
+                    : data.categorySchemas;
+            }
             if (data.heroTitle) heroTitle = data.heroTitle;
             if (data.heroBgUrl) heroBgUrl = data.heroBgUrl;
+            if (data.viewMode === 'card' || data.viewMode === 'table') viewMode = data.viewMode;
 
-            saveToLocalStorageAndDrive();
+            migratedLegacyDataToAccount = false;
+            persistAccountDataLocally();
             applyHeroSettingsUI();
             renderCategoryOptions();
+            setViewMode(viewMode, false);
             filterAndRender();
             return true;
         }
@@ -1527,7 +1659,7 @@
             }
 
             const result = await response.json();
-            localStorage.setItem(GOOGLE_DRIVE_FILE_KEY, result.id || '');
+            localStorage.setItem(accountStorageKey(GOOGLE_DRIVE_FILE_KEY), result.id || '');
             return result;
         }
 
@@ -1549,7 +1681,7 @@
             return response.json();
         }
 
-        async function syncToGoogleDrive() {
+        async function syncToGoogleDrive(silent = false) {
             if (!googleAccessToken) return false;
 
             try {
@@ -1565,14 +1697,30 @@
                 return true;
             } catch (error) {
                 console.error('Google Drive 同步錯誤：', error);
-                Swal.fire({
-                    title: '雲端同步失敗',
-                    text: '請確認 Google Drive 權限是否已授權，且 Client ID 正確。',
-                    icon: 'error',
-                    confirmButtonText: '確認'
-                });
+                if (!silent) {
+                    Swal.fire({
+                        title: '雲端同步失敗',
+                        text: '請確認 Google Drive 權限是否已授權，且 Client ID 正確。',
+                        icon: 'error',
+                        confirmButtonText: '確認'
+                    });
+                }
                 return false;
             }
+        }
+
+        async function getGoogleAccountProfile() {
+            const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${googleAccessToken}` }
+            });
+            if (!response.ok) {
+                throw new Error(`無法取得 Google 帳號資料 (${response.status})`);
+            }
+            const profile = await response.json();
+            if (!profile.sub || !profile.email) {
+                throw new Error('Google 未提供有效的帳號識別資料。');
+            }
+            return { sub: profile.sub, email: profile.email };
         }
 
         function requestGoogleDriveAccess(prompt, isRestore = false) {
@@ -1604,13 +1752,19 @@
 
             const tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/drive.appdata',
+                scope: 'openid email profile https://www.googleapis.com/auth/drive.appdata',
                 callback: async (response) => {
+                    if (googleRestoreTimeout) {
+                        clearTimeout(googleRestoreTimeout);
+                        googleRestoreTimeout = null;
+                    }
                     if (response.error) {
                         console.error('Google OAuth 錯誤：', response);
                         googleAccessToken = null;
                         localStorage.removeItem(GOOGLE_LOGIN_PREFERENCE_KEY);
                         setGoogleConnState(false);
+                        const status = document.getElementById('login-gate-status');
+                        if (status) status.textContent = isRestore ? '請按「使用 Google 登入」重新連結帳號。' : (response.error_description || 'Google 登入無法完成，請重試。');
                         if (!isRestore) {
                             Swal.fire({
                                 title: '登入失敗',
@@ -1624,15 +1778,21 @@
 
                     if (response.access_token) {
                         googleAccessToken = response.access_token;
-                        localStorage.setItem(GOOGLE_LOGIN_PREFERENCE_KEY, 'true');
-                        setGoogleConnState(true);
 
                         try {
+                            const profile = await getGoogleAccountProfile();
+                            activeGoogleAccount = profile;
+                            loadAccountDataLocally(profile.sub);
+                            localStorage.setItem(GOOGLE_LOGIN_PREFERENCE_KEY, 'true');
+
                             const backupExists = await loadFromGoogleDrive();
                             if (!backupExists) {
-                                const synced = await syncToGoogleDrive();
+                                const synced = await syncToGoogleDrive(true);
                                 if (!synced) throw new Error('無法建立初始雲端備份');
                             }
+                            persistAccountDataLocally();
+                            migratedLegacyDataToAccount = false;
+                            setGoogleConnState(true, profile.email);
                             if (!isRestore) {
                                 Swal.fire({
                                     title: '已成功登入 Google！',
@@ -1644,10 +1804,17 @@
                             }
                         } catch (error) {
                             console.error('Google Drive 初始同步錯誤：', error);
+                            googleAccessToken = null;
+                            activeGoogleAccount = null;
+                            localStorage.removeItem(GOOGLE_LOGIN_PREFERENCE_KEY);
+                            resetAccountDataInMemory();
+                            setGoogleConnState(false);
+                            const status = document.getElementById('login-gate-status');
+                            if (status) status.textContent = error.message || '登入或雲端同步失敗，請重試。';
                             if (!isRestore) {
                                 Swal.fire({
                                     title: '同步初始化失敗',
-                                    text: '已登入，但雲端同步尚未完成，請稍後再試。',
+                                    text: error.message || '登入或雲端同步失敗，請稍後再試。',
                                     icon: 'warning',
                                     confirmButtonText: '確認'
                                 });
@@ -1666,17 +1833,31 @@
             const btnText = document.getElementById('google-btn-text');
             if (btnText) btnText.textContent = '正在恢復 Google 連結…';
             requestGoogleDriveAccess('', true);
+            googleRestoreTimeout = setTimeout(() => {
+                if (!googleAccessToken) {
+                    googleRestoreStarted = false;
+                    googleRestoreTimeout = null;
+                    localStorage.removeItem(GOOGLE_LOGIN_PREFERENCE_KEY);
+                    setGoogleConnState(false);
+                    const status = document.getElementById('login-gate-status');
+                    if (status) status.textContent = '瀏覽器未自動恢復 Google 授權，請按「使用 Google 登入」。';
+                }
+            }, 4000);
         }
 
         function handleGoogleDriveAuth() {
-            requestGoogleDriveAccess('consent');
+            const status = document.getElementById('login-gate-status');
+            if (status) status.textContent = '正在連結 Google 帳號與載入個人資料…';
+            requestGoogleDriveAccess('select_account consent');
         }
 
         function logoutGoogleDrive() {
             const accessToken = googleAccessToken;
             googleAccessToken = null;
             localStorage.removeItem(GOOGLE_LOGIN_PREFERENCE_KEY);
-            localStorage.removeItem(GOOGLE_DRIVE_FILE_KEY);
+            activeGoogleAccount = null;
+            googleRestoreStarted = false;
+            resetAccountDataInMemory();
             setGoogleConnState(false);
 
             if (accessToken && window.google?.accounts?.oauth2) {
