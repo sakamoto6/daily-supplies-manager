@@ -525,21 +525,7 @@
             ]
         };
 
-        let items = [
-            {
-                id: 'item-1',
-                name: '日系黑咖啡豆 (250g)',
-                category: '食品/零食',
-                quantity: 3,
-                minAlert: 1,
-                unitPrice: 380,
-                expiryDate: '2026-11-20',
-                photo: null,
-                customFields: [{ key: '烘焙度', value: '中深烘焙' }, { key: '保存方式', value: '常溫' }],
-                archived: false,
-                updatedAt: new Date().toISOString()
-            }
-        ];
+        let items = [];
 
         const initialAppData = {
             categories: JSON.parse(JSON.stringify(categories)),
@@ -661,7 +647,7 @@
             const totalCount = activeItems.length;
 
             const currentValue = activeItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
-            const historyValue = items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+            const historyValue = items.reduce((sum, item) => sum + getItemHistoricalValue(item), 0);
             const lowStockCount = activeItems.filter(i => i.quantity <= (i.minAlert || 1)).length;
 
             const today = new Date();
@@ -679,6 +665,18 @@
             document.getElementById('stat-history-value').textContent = `NT$ ${historyValue.toLocaleString()}`;
             document.getElementById('stat-low-stock').textContent = lowStockCount;
             document.getElementById('stat-expiring').textContent = expiringCount;
+        }
+
+        function getItemHistoricalValue(item) {
+            const historicalValue = Number(item.historicalValue);
+            if (Number.isFinite(historicalValue) && historicalValue >= 0) return historicalValue;
+            return Math.max(0, (item.quantity || 0) * (item.unitPrice || 0));
+        }
+
+        function ensureItemHistoricalValues() {
+            items.forEach(item => {
+                item.historicalValue = getItemHistoricalValue(item);
+            });
         }
 
         function setViewMode(mode, persist = true) {
@@ -729,6 +727,7 @@
             });
 
             const container = document.getElementById('items-container');
+            updateDashboardStats();
 
             if (filtered.length === 0) {
                 container.innerHTML = `
@@ -748,7 +747,6 @@
             }
 
             lucide.createIcons();
-            updateDashboardStats();
         }
 
         function renderCardView(itemList, container) {
@@ -948,7 +946,10 @@
         function adjustQuantity(id, delta) {
             const item = items.find(i => i.id === id);
             if (item) {
-                item.quantity = Math.max(0, (item.quantity || 0) + delta);
+                const previousQuantity = Math.max(0, item.quantity || 0);
+                const nextQuantity = Math.max(0, previousQuantity + delta);
+                item.historicalValue = getItemHistoricalValue(item) + Math.max(0, nextQuantity - previousQuantity) * (item.unitPrice || 0);
+                item.quantity = nextQuantity;
                 if (item.quantity === 0) item.archived = true;
                 else item.archived = false;
                 item.updatedAt = new Date().toISOString();
@@ -960,9 +961,13 @@
         function toggleArchive(id, archived) {
             const item = items.find(i => i.id === id);
             if (item) {
+                item.historicalValue = getItemHistoricalValue(item);
                 item.archived = archived;
                 if (archived) item.quantity = 0;
-                else if (item.quantity === 0) item.quantity = 1;
+                else if (item.quantity === 0) {
+                    item.quantity = 1;
+                    item.historicalValue += item.unitPrice || 0;
+                }
                 item.updatedAt = new Date().toISOString();
                 saveToLocalStorageAndDrive();
                 filterAndRender();
@@ -1202,6 +1207,8 @@
             if (id) {
                 const item = items.find(i => i.id === id);
                 if (item) {
+                    const previousQuantity = Math.max(0, item.quantity || 0);
+                    item.historicalValue = getItemHistoricalValue(item) + Math.max(0, quantity - previousQuantity) * unitPrice;
                     item.name = name;
                     item.category = category;
                     item.quantity = quantity;
@@ -1218,6 +1225,7 @@
                     id: 'item-' + Date.now(),
                     name, category, quantity, unitPrice, minAlert, expiryDate,
                     photo: photo, customFields,
+                    historicalValue: quantity * unitPrice,
                     archived: quantity === 0,
                     updatedAt: new Date().toISOString()
                 };
@@ -1458,8 +1466,17 @@
             }
         }
 
+        function isStarterSampleItem(item) {
+            return item?.id === 'item-1' && item?.name === '日系黑咖啡豆 (250g)';
+        }
+
+        function removeStarterSampleItems(itemList) {
+            return itemList.filter(item => !isStarterSampleItem(item));
+        }
+
         function persistAccountDataLocally() {
             if (!activeGoogleAccount) return;
+            ensureItemHistoricalValues();
             localStorage.setItem(accountStorageKey('initialized'), 'true');
             localStorage.setItem(accountStorageKey('categories'), JSON.stringify(categories));
             localStorage.setItem(accountStorageKey('category_schemas'), JSON.stringify(categorySchemas));
@@ -1475,7 +1492,7 @@
             if (localStorage.getItem(initializedKey) === 'true') {
                 categories = readStoredJson(accountStorageKey('categories', accountId), initialAppData.categories);
                 categorySchemas = readStoredJson(accountStorageKey('category_schemas', accountId), initialAppData.categorySchemas);
-                items = readStoredJson(accountStorageKey('items', accountId), initialAppData.items);
+                items = removeStarterSampleItems(readStoredJson(accountStorageKey('items', accountId), initialAppData.items));
                 heroTitle = localStorage.getItem(accountStorageKey('hero_title', accountId)) || initialAppData.heroTitle;
                 heroBgUrl = localStorage.getItem(accountStorageKey('hero_bg', accountId)) || initialAppData.heroBgUrl;
                 viewMode = localStorage.getItem(accountStorageKey('view_mode', accountId)) || initialAppData.viewMode;
@@ -1486,7 +1503,7 @@
                 .some(key => localStorage.getItem(key) !== null);
             categories = readStoredJson('dsm_categories', initialAppData.categories);
             categorySchemas = readStoredJson('dsm_category_schemas', initialAppData.categorySchemas);
-            items = readStoredJson('dsm_items', initialAppData.items);
+            items = removeStarterSampleItems(readStoredJson('dsm_items', initialAppData.items));
             heroTitle = localStorage.getItem('dsm_hero_title') || initialAppData.heroTitle;
             heroBgUrl = localStorage.getItem('dsm_hero_bg') || initialAppData.heroBgUrl;
             viewMode = localStorage.getItem('dsm_view_mode') || initialAppData.viewMode;
@@ -1544,6 +1561,7 @@
         }
 
         function buildDriveBackupPayload() {
+            ensureItemHistoricalValues();
             return {
                 accountId: activeGoogleAccount?.sub,
                 categories,
@@ -1604,10 +1622,11 @@
                 throw new Error('Google Drive 備份帳號不符，已停止載入以避免混用資料。');
             }
 
+            const driveHasStarterSample = Array.isArray(data.items) && data.items.some(isStarterSampleItem);
             if (Array.isArray(data.items)) {
-                const driveItems = data.items;
+                const driveItems = removeStarterSampleItems(data.items);
                 items = migratedLegacyDataToAccount
-                    ? [...driveItems, ...items.filter(localItem => !driveItems.some(driveItem => driveItem.id === localItem.id))]
+                    ? removeStarterSampleItems([...driveItems, ...items.filter(localItem => !driveItems.some(driveItem => driveItem.id === localItem.id))])
                     : driveItems;
             }
             if (Array.isArray(data.categories)) {
@@ -1627,6 +1646,7 @@
 
             migratedLegacyDataToAccount = false;
             persistAccountDataLocally();
+            if (driveHasStarterSample) await syncToGoogleDrive(true);
             applyHeroSettingsUI();
             renderCategoryOptions();
             setViewMode(viewMode, false);
