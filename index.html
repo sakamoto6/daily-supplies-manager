@@ -39,7 +39,7 @@
 
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script id="google-identity-script" src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
         .glass-panel {
@@ -118,6 +118,10 @@
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                     </svg>
                     <span id="google-btn-text">Google 登入同步</span>
+                </button>
+                <button id="google-logout-btn" onclick="logoutGoogleDrive()" class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-100 transition" title="登出 Google 並解除雲端連結">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">登出 Google</span>
                 </button>
             </div>
         </div>
@@ -439,10 +443,12 @@
         const GOOGLE_CLIENT_ID = '858401202746-d89bi2hli17tc1aob4jibfdrs7o6ab1l.apps.googleusercontent.com';
         const GOOGLE_DRIVE_FILE_NAME = 'dsm_data.json';
         const GOOGLE_DRIVE_FILE_KEY = 'dsm_google_drive_file_id';
+        const GOOGLE_LOGIN_PREFERENCE_KEY = 'dsm_google_login_preferred';
 
         let currentSection = 'hero';
         let viewMode = localStorage.getItem('dsm_view_mode') || 'card';
         let googleAccessToken = null;
+        let googleRestoreStarted = false;
         let itemPhotoBase64 = null;
         let heroBgBase64 = null;
         let editingCatName = null;
@@ -523,6 +529,13 @@
             filterAndRender();
             updateDashboardStats();
             setViewMode(viewMode);
+            if (localStorage.getItem(GOOGLE_LOGIN_PREFERENCE_KEY) === 'true') {
+                if (window.google?.accounts?.oauth2) {
+                    restoreGoogleDriveSession();
+                } else {
+                    document.getElementById('google-identity-script').addEventListener('load', restoreGoogleDriveSession, { once: true });
+                }
+            }
         });
 
         function applyHeroSettingsUI() {
@@ -1411,11 +1424,13 @@
         function setGoogleConnState(isConnected) {
             const btnText = document.getElementById('google-btn-text');
             const btn = document.getElementById('google-login-btn');
-            if (!btnText || !btn) return;
+            const logoutBtn = document.getElementById('google-logout-btn');
+            if (!btnText || !btn || !logoutBtn) return;
 
             btnText.textContent = isConnected ? '已連結 Google 雲端' : 'Google 登入同步';
             btn.classList.toggle('border-emerald-500', isConnected);
             btn.classList.toggle('text-emerald-600', isConnected);
+            logoutBtn.classList.toggle('hidden', !isConnected);
         }
 
         function buildDriveBackupPayload() {
@@ -1535,7 +1550,7 @@
         }
 
         async function syncToGoogleDrive() {
-            if (!googleAccessToken) return;
+            if (!googleAccessToken) return false;
 
             try {
                 const payload = buildDriveBackupPayload();
@@ -1547,6 +1562,7 @@
                 } else {
                     await createGoogleDriveBackupFile(payload);
                 }
+                return true;
             } catch (error) {
                 console.error('Google Drive 同步錯誤：', error);
                 Swal.fire({
@@ -1555,27 +1571,34 @@
                     icon: 'error',
                     confirmButtonText: '確認'
                 });
+                return false;
             }
         }
 
-        function handleGoogleDriveAuth() {
+        function requestGoogleDriveAccess(prompt, isRestore = false) {
             if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
-                Swal.fire({
-                    title: '未設定 Google Client ID',
-                    text: '請在 index.html 中填入你在 Google Cloud 建立好的 OAuth Client ID，然後重新點擊登入。',
-                    icon: 'info',
-                    confirmButtonText: '我知道了'
-                });
+                if (!isRestore) {
+                    Swal.fire({
+                        title: '未設定 Google Client ID',
+                        text: '請在 index.html 中填入你在 Google Cloud 建立好的 OAuth Client ID，然後重新點擊登入。',
+                        icon: 'info',
+                        confirmButtonText: '我知道了'
+                    });
+                }
                 return;
             }
 
             if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
-                Swal.fire({
-                    title: 'Google SDK 尚未載入',
-                    text: '請稍後再試一次，或重新整理頁面。',
-                    icon: 'warning',
-                    confirmButtonText: '確認'
-                });
+                if (isRestore) {
+                    return;
+                } else {
+                    Swal.fire({
+                        title: 'Google SDK 尚未載入',
+                        text: '請稍後再試一次，或重新整理頁面。',
+                        icon: 'warning',
+                        confirmButtonText: '確認'
+                    });
+                }
                 return;
             }
 
@@ -1585,45 +1608,90 @@
                 callback: async (response) => {
                     if (response.error) {
                         console.error('Google OAuth 錯誤：', response);
-                        Swal.fire({
-                            title: '登入失敗',
-                            text: response.error_description || 'Google 驗證無法完成。',
-                            icon: 'error',
-                            confirmButtonText: '確認'
-                        });
+                        googleAccessToken = null;
+                        localStorage.removeItem(GOOGLE_LOGIN_PREFERENCE_KEY);
+                        setGoogleConnState(false);
+                        if (!isRestore) {
+                            Swal.fire({
+                                title: '登入失敗',
+                                text: response.error_description || 'Google 驗證無法完成。',
+                                icon: 'error',
+                                confirmButtonText: '確認'
+                            });
+                        }
                         return;
                     }
 
                     if (response.access_token) {
                         googleAccessToken = response.access_token;
+                        localStorage.setItem(GOOGLE_LOGIN_PREFERENCE_KEY, 'true');
                         setGoogleConnState(true);
 
                         try {
                             const backupExists = await loadFromGoogleDrive();
                             if (!backupExists) {
-                                await syncToGoogleDrive();
+                                const synced = await syncToGoogleDrive();
+                                if (!synced) throw new Error('無法建立初始雲端備份');
                             }
-                            Swal.fire({
-                                title: '已成功登入 Google！',
-                                text: 'Google Drive 雲端同步已啟動。',
-                                icon: 'success',
-                                timer: 1800,
-                                showConfirmButton: false
-                            });
+                            if (!isRestore) {
+                                Swal.fire({
+                                    title: '已成功登入 Google！',
+                                    text: 'Google Drive 雲端同步已啟動。',
+                                    icon: 'success',
+                                    timer: 1800,
+                                    showConfirmButton: false
+                                });
+                            }
                         } catch (error) {
                             console.error('Google Drive 初始同步錯誤：', error);
-                            Swal.fire({
-                                title: '同步初始化失敗',
-                                text: '已登入，但雲端同步尚未完成，請稍後再試。',
-                                icon: 'warning',
-                                confirmButtonText: '確認'
-                            });
+                            if (!isRestore) {
+                                Swal.fire({
+                                    title: '同步初始化失敗',
+                                    text: '已登入，但雲端同步尚未完成，請稍後再試。',
+                                    icon: 'warning',
+                                    confirmButtonText: '確認'
+                                });
+                            }
                         }
                     }
                 }
             });
 
-            tokenClient.requestAccessToken({ prompt: 'consent' });
+            tokenClient.requestAccessToken({ prompt });
+        }
+
+        function restoreGoogleDriveSession() {
+            if (googleRestoreStarted) return;
+            googleRestoreStarted = true;
+            const btnText = document.getElementById('google-btn-text');
+            if (btnText) btnText.textContent = '正在恢復 Google 連結…';
+            requestGoogleDriveAccess('', true);
+        }
+
+        function handleGoogleDriveAuth() {
+            requestGoogleDriveAccess('consent');
+        }
+
+        function logoutGoogleDrive() {
+            const accessToken = googleAccessToken;
+            googleAccessToken = null;
+            localStorage.removeItem(GOOGLE_LOGIN_PREFERENCE_KEY);
+            localStorage.removeItem(GOOGLE_DRIVE_FILE_KEY);
+            setGoogleConnState(false);
+
+            if (accessToken && window.google?.accounts?.oauth2) {
+                google.accounts.oauth2.revoke(accessToken, () => {});
+            }
+
+            Swal.fire({
+                title: '已登出 Google',
+                text: '本機庫存資料不會被刪除。',
+                icon: 'success',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 1800
+            });
         }
     </script>
 </body>
