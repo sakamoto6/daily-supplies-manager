@@ -100,6 +100,10 @@
             </div>
 
             <div class="flex items-center space-x-2 sm:space-x-3">
+                <button onclick="openChangelogModal()" class="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition" title="查看更新歷程" aria-label="更新歷程">
+                    <i data-lucide="scroll-text" class="w-4 h-4 text-amber-600"></i>
+                    <span class="hidden sm:inline">更新歷程</span>
+                </button>
                 <button onclick="switchViewSection(currentSection === 'hero' ? 'app' : 'hero')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition">
                     <i data-lucide="layout" class="w-4 h-4"></i>
                     <span id="nav-toggle-text" class="hidden sm:inline">前往小倉庫</span>
@@ -138,6 +142,10 @@
             <button onclick="handleGoogleDriveAuth()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 font-zen font-bold text-slate-900 shadow-md transition hover:bg-amber-600">
                 <i data-lucide="log-in" class="h-4 w-4"></i>
                 使用 Google 登入
+            </button>
+            <button id="local-demo-button" onclick="startLocalDemoMode()" class="hidden mx-auto items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 font-medium text-slate-700 transition hover:bg-slate-100">
+                <i data-lucide="flask-conical" class="h-4 w-4"></i>
+                本機測試模式（不登入）
             </button>
             <p id="login-gate-status" class="min-h-5 text-xs text-slate-500" aria-live="polite"></p>
         </div>
@@ -264,6 +272,10 @@
                         <i data-lucide="plus" class="w-4 h-4"></i>
                         <span>新增用品</span>
                     </button>
+                    <button onclick="openItemHistoryModal()" class="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium text-sm transition flex items-center gap-1.5" title="查看新增用品歷史紀錄">
+                        <i data-lucide="history" class="w-4 h-4"></i>
+                        <span>歷史紀錄</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -329,6 +341,11 @@
                         <label class="block text-xs font-semibold text-slate-600 mb-1">目前庫存數量 <span class="text-rose-500">*</span></label>
                         <input type="number" id="item-quantity" min="0" required value="1" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition">
                     </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">購買日期</label>
+                        <input type="date" id="item-purchase-date" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition">
+                    </div>
                 </div>
 
                 <div class="pt-3 border-t border-slate-100 space-y-3">
@@ -357,12 +374,15 @@
                     <div id="adhoc-fields-container" class="space-y-2"></div>
                 </div>
 
-                <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-3">
-                    <button type="button" onclick="closeItemModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition">
+                <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3">
+                    <button type="button" onclick="closeItemModal()" class="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition">
                         取消
                     </button>
-                    <button type="submit" class="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-zen font-bold shadow-md transition">
+                    <button type="submit" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-900 font-zen font-bold shadow-md transition">
                         儲存用品
+                    </button>
+                    <button id="save-and-add-button" type="submit" name="save-mode" value="add-another" class="hidden w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-zen font-bold shadow-sm transition">
+                        儲存並新增下一筆
                     </button>
                 </div>
             </form>
@@ -420,6 +440,50 @@
         </div>
     </div>
 
+    <div id="changelog-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-zen font-bold text-xl text-slate-800">更新歷程</h3>
+                <button onclick="closeChangelogModal()" class="p-1.5 rounded-full hover:bg-slate-100 text-slate-400" title="關閉">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="changelog-list" class="max-h-[65vh] space-y-3 overflow-y-auto custom-scrollbar"></div>
+            <div class="flex justify-end">
+                <button onclick="closeChangelogModal()" class="px-5 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="item-history-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100 my-6">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-zen font-bold text-xl text-slate-800">新增用品歷史紀錄</h3>
+                <button onclick="closeItemHistoryModal()" class="p-1.5 rounded-full hover:bg-slate-100 text-slate-400" title="關閉">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+                <label class="flex-1 space-y-1 text-xs font-semibold text-slate-600">
+                    <span>日期依據</span>
+                    <select id="history-date-mode" onchange="renderItemHistory()" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                        <option value="createdAt">新增日期</option>
+                        <option value="purchaseDate">購買日期</option>
+                    </select>
+                </label>
+                <label class="flex-1 space-y-1 text-xs font-semibold text-slate-600">
+                    <span>篩選日期</span>
+                    <input id="history-date-filter" type="date" onchange="renderItemHistory()" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </label>
+                <button onclick="clearItemHistoryDateFilter()" class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50" title="清除日期篩選">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                    <span>清除日期</span>
+                </button>
+            </div>
+            <div id="item-history-list" class="max-h-[60vh] overflow-auto rounded-xl border border-slate-100 custom-scrollbar"></div>
+        </div>
+    </div>
+
     <div id="help-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
         <div class="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8 border border-slate-100 animate-scale-up">
             <div class="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -460,6 +524,13 @@
         const GOOGLE_DRIVE_FILE_NAME = 'dsm_data.json';
         const GOOGLE_DRIVE_FILE_KEY = 'dsm_google_drive_file_id';
         const GOOGLE_LOGIN_PREFERENCE_KEY = 'dsm_google_login_preferred';
+        const LOCAL_DEMO_PREFERENCE_KEY = 'dsm_local_demo_enabled';
+        const CHANGELOG_CONTENT = [
+            { date: '2026-10-02', text: '新增用品歷史紀錄，可依新增日期或購買日期查詢。' },
+            { date: '2026-10-02', text: '新增更新歷程與歷史金額累計。' },
+            { date: '2026-10-02', text: '新增儲存並新增下一筆功能。' }
+
+        ];
 
         let currentSection = 'hero';
         let viewMode = 'card';
@@ -468,6 +539,7 @@
         let googleRestoreStarted = false;
         let googleRestoreTimeout = null;
         let migratedLegacyDataToAccount = false;
+        let changelogSeenStamp = '';
         let itemPhotoBase64 = null;
         let heroBgBase64 = null;
         let editingCatName = null;
@@ -478,6 +550,7 @@
         let categories = [
             '食品/零食', '美妝/保養', '藥品/保健', '清潔/日用', '3C/家電', '其他'
         ];
+        let itemHistory = [];
 
         let categorySchemas = {
             '食品/零食': [
@@ -533,7 +606,9 @@
             items: JSON.parse(JSON.stringify(items)),
             heroTitle,
             heroBgUrl,
-            viewMode
+            viewMode,
+            changelogSeenStamp,
+            itemHistory: []
         };
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -544,7 +619,11 @@
             updateDashboardStats();
             setGoogleConnState(false);
             setViewMode(viewMode);
-            if (localStorage.getItem(GOOGLE_LOGIN_PREFERENCE_KEY) === 'true') {
+            const localDemoButton = document.getElementById('local-demo-button');
+            if (isLocalDevelopmentHost()) localDemoButton.classList.remove('hidden');
+            if (isLocalDevelopmentHost() && localStorage.getItem(LOCAL_DEMO_PREFERENCE_KEY) === 'true') {
+                startLocalDemoMode();
+            } else if (localStorage.getItem(GOOGLE_LOGIN_PREFERENCE_KEY) === 'true') {
                 if (window.google?.accounts?.oauth2) {
                     restoreGoogleDriveSession();
                 } else {
@@ -1077,6 +1156,7 @@
         function openItemModal(itemId = null) {
             itemPhotoBase64 = null;
             document.getElementById('adhoc-fields-container').innerHTML = '';
+            document.getElementById('save-and-add-button').classList.toggle('hidden', Boolean(itemId));
 
             const modal = document.getElementById('item-modal');
             const title = document.getElementById('modal-title');
@@ -1092,6 +1172,7 @@
                 document.getElementById('item-name').value = item.name;
                 document.getElementById('item-category').value = item.category;
                 document.getElementById('item-quantity').value = item.quantity;
+                document.getElementById('item-purchase-date').value = item.purchaseDate || dateInputValue(item.createdAt || item.updatedAt);
 
                 renderDynamicCategoryFields(item.category, item);
 
@@ -1102,6 +1183,7 @@
 
                 const firstCat = categories[0] || '其他';
                 document.getElementById('item-category').value = firstCat;
+                document.getElementById('item-purchase-date').value = localDateValue();
                 renderDynamicCategoryFields(firstCat);
             }
 
@@ -1110,6 +1192,20 @@
 
         function closeItemModal() {
             document.getElementById('item-modal').classList.add('hidden');
+        }
+
+        function prepareNextItem(categoryName) {
+            itemPhotoBase64 = null;
+            document.getElementById('item-form').reset();
+            document.getElementById('item-id').value = '';
+            document.getElementById('modal-title').textContent = '新增用品';
+            document.getElementById('adhoc-fields-container').innerHTML = '';
+
+            const nextCategory = categories.includes(categoryName) ? categoryName : (categories[0] || '其他');
+            document.getElementById('item-category').value = nextCategory;
+            document.getElementById('item-quantity').value = '1';
+            document.getElementById('item-purchase-date').value = localDateValue();
+            renderDynamicCategoryFields(nextCategory);
         }
 
         function addAdhocFieldRow(key = '', value = '') {
@@ -1170,10 +1266,12 @@
         function saveItem(e) {
             e.preventDefault();
 
+            const saveAndAddAnother = e.submitter?.value === 'add-another';
             const id = document.getElementById('item-id').value;
             const name = document.getElementById('item-name').value.trim();
             const category = document.getElementById('item-category').value;
             const quantity = parseInt(document.getElementById('item-quantity').value) || 0;
+            const purchaseDate = document.getElementById('item-purchase-date').value || localDateValue();
 
             let unitPrice = 0;
             let minAlert = 1;
@@ -1213,6 +1311,7 @@
                     item.category = category;
                     item.quantity = quantity;
                     item.unitPrice = unitPrice;
+                    item.purchaseDate = purchaseDate;
                     item.minAlert = minAlert;
                     item.expiryDate = expiryDate;
                     item.photo = photo;
@@ -1221,23 +1320,31 @@
                     item.updatedAt = new Date().toISOString();
                 }
             } else {
+                const createdAt = new Date().toISOString();
                 const newItem = {
                     id: 'item-' + Date.now(),
                     name, category, quantity, unitPrice, minAlert, expiryDate,
                     photo: photo, customFields,
                     historicalValue: quantity * unitPrice,
+                    createdAt,
+                    purchaseDate,
                     archived: quantity === 0,
-                    updatedAt: new Date().toISOString()
+                    updatedAt: createdAt
                 };
                 items.unshift(newItem);
+                itemHistory.unshift(createItemHistoryRecord(newItem));
             }
 
             saveToLocalStorageAndDrive();
-            closeItemModal();
+            if (saveAndAddAnother && !id) {
+                prepareNextItem(category);
+            } else {
+                closeItemModal();
+            }
             filterAndRender();
 
             Swal.fire({
-                title: '儲存成功！',
+                title: saveAndAddAnother && !id ? '已儲存，請新增下一筆' : '儲存成功！',
                 icon: 'success',
                 toast: true,
                 position: 'top-end',
@@ -1450,6 +1557,161 @@
         }
         function closeHelpModal() { document.getElementById('help-modal').classList.add('hidden'); }
 
+        function isLocalDevelopmentHost() {
+            return ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        }
+
+        function startLocalDemoMode() {
+            if (!isLocalDevelopmentHost()) return;
+
+            googleAccessToken = null;
+            activeGoogleAccount = { sub: 'local-demo', email: '本機測試模式', localOnly: true };
+            localStorage.removeItem(GOOGLE_LOGIN_PREFERENCE_KEY);
+
+            if (localStorage.getItem(accountStorageKey('initialized')) === 'true') {
+                loadAccountDataLocally(activeGoogleAccount.sub);
+            } else {
+                resetAccountDataInMemory();
+                persistAccountDataLocally();
+            }
+
+            localStorage.setItem(LOCAL_DEMO_PREFERENCE_KEY, 'true');
+            setGoogleConnState(true, '本機測試模式');
+            setViewMode(viewMode, false);
+            renderCategoryOptions();
+            filterAndRender();
+            showChangelogIfUpdated();
+        }
+
+        function openChangelogModal() {
+            if (!activeGoogleAccount) return;
+            renderChangelog();
+            document.getElementById('changelog-modal').classList.remove('hidden');
+            markChangelogAsSeen();
+        }
+
+        function showChangelogIfUpdated() {
+            if (!activeGoogleAccount || changelogSeenStamp === JSON.stringify(CHANGELOG_CONTENT)) return;
+            openChangelogModal();
+        }
+
+        function markChangelogAsSeen() {
+            const currentStamp = JSON.stringify(CHANGELOG_CONTENT);
+            if (changelogSeenStamp === currentStamp) return;
+            changelogSeenStamp = currentStamp;
+            persistAccountDataLocally();
+            if (googleAccessToken) syncToGoogleDrive(true);
+        }
+
+        function closeChangelogModal() {
+            document.getElementById('changelog-modal').classList.add('hidden');
+        }
+
+        function renderChangelog() {
+            const container = document.getElementById('changelog-list');
+            container.replaceChildren();
+
+            if (CHANGELOG_CONTENT.length === 0) {
+                const emptyState = document.createElement('p');
+                emptyState.className = 'py-8 text-center text-sm text-slate-500';
+                emptyState.textContent = '目前沒有更新紀錄';
+                container.appendChild(emptyState);
+                return;
+            }
+
+            CHANGELOG_CONTENT.forEach(entry => {
+                const article = document.createElement('article');
+                article.className = 'rounded-xl border border-slate-200 bg-slate-50 p-4';
+
+                const date = document.createElement('p');
+                date.className = 'text-xs font-medium text-amber-700';
+                date.textContent = entry.date;
+
+                const text = document.createElement('p');
+                text.className = 'mt-1 text-sm leading-6 text-slate-700';
+                text.textContent = entry.text;
+
+                article.append(date, text);
+                container.appendChild(article);
+            });
+        }
+
+        function openItemHistoryModal() {
+            if (!activeGoogleAccount) return;
+            document.getElementById('history-date-mode').value = 'createdAt';
+            document.getElementById('history-date-filter').value = '';
+            renderItemHistory();
+            document.getElementById('item-history-modal').classList.remove('hidden');
+        }
+
+        function closeItemHistoryModal() {
+            document.getElementById('item-history-modal').classList.add('hidden');
+        }
+
+        function clearItemHistoryDateFilter() {
+            document.getElementById('history-date-filter').value = '';
+            renderItemHistory();
+        }
+
+        function getFilteredItemHistory(mode, selectedDate = '') {
+            return itemHistory
+                .filter(record => !selectedDate || dateInputValue(getHistoryDate(record, mode)) === selectedDate)
+                .sort((left, right) => {
+                    const leftTime = new Date(getHistoryDate(left, mode)).getTime();
+                    const rightTime = new Date(getHistoryDate(right, mode)).getTime();
+                    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+                });
+        }
+
+        function renderItemHistory() {
+            const container = document.getElementById('item-history-list');
+            const mode = document.getElementById('history-date-mode').value;
+            const selectedDate = document.getElementById('history-date-filter').value;
+            const dateHeading = mode === 'purchaseDate' ? '購買日期' : '新增日期';
+            const records = getFilteredItemHistory(mode, selectedDate);
+
+            container.replaceChildren();
+            if (records.length === 0) {
+                const emptyState = document.createElement('p');
+                emptyState.className = 'p-10 text-center text-sm text-slate-500';
+                emptyState.textContent = selectedDate ? '該日期沒有新增用品紀錄' : '目前沒有新增用品紀錄';
+                container.appendChild(emptyState);
+                return;
+            }
+
+            const table = document.createElement('table');
+            table.className = 'w-full min-w-[700px] border-collapse text-left';
+            const header = document.createElement('thead');
+            header.className = 'sticky top-0 bg-slate-50';
+            const headerRow = document.createElement('tr');
+            [dateHeading, '用品名稱', '分類', '新增數量', '單價', '新增總額'].forEach(label => {
+                const cell = document.createElement('th');
+                cell.className = 'px-3 py-2.5 text-xs font-semibold text-slate-500';
+                cell.textContent = label;
+                headerRow.appendChild(cell);
+            });
+            header.appendChild(headerRow);
+            table.appendChild(header);
+
+            const body = document.createElement('tbody');
+            body.className = 'divide-y divide-slate-100';
+            records.forEach(record => {
+                const row = document.createElement('tr');
+                appendHistoryCell(row, formatHistoryDate(getHistoryDate(record, mode)), 'whitespace-nowrap');
+                appendHistoryCell(row, record.name || '未命名用品', 'font-medium');
+                appendHistoryCell(row, record.category || '-');
+                appendHistoryCell(row, String(Number(record.quantity) || 0), 'text-right');
+                appendHistoryCell(row, `NT$ ${(Number(record.unitPrice) || 0).toLocaleString()}`, 'whitespace-nowrap');
+                const totalValue = Number.isFinite(Number(record.totalValue))
+                    ? Number(record.totalValue)
+                    : (Number(record.quantity) || 0) * (Number(record.unitPrice) || 0);
+                appendHistoryCell(row, `NT$ ${totalValue.toLocaleString()}`, 'whitespace-nowrap');
+                body.appendChild(row);
+            });
+            table.appendChild(body);
+            container.appendChild(table);
+        }
+
         function accountStorageKey(key, accountId = activeGoogleAccount?.sub) {
             if (!accountId) return null;
             return `dsm_account_${encodeURIComponent(accountId)}_${key}`;
@@ -1474,6 +1736,69 @@
             return itemList.filter(item => !isStarterSampleItem(item));
         }
 
+        function localDateValue(value = new Date()) {
+            const date = value instanceof Date ? value : new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function dateInputValue(value) {
+            if (!value) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+            return localDateValue(value);
+        }
+
+        function createItemHistoryRecord(item) {
+            const createdAt = item.createdAt || item.updatedAt || new Date().toISOString();
+            const quantity = Number(item.quantity) || 0;
+            const unitPrice = Number(item.unitPrice) || 0;
+            return {
+                id: `${item.id}-created`,
+                itemId: item.id,
+                name: item.name || '',
+                category: item.category || '',
+                quantity,
+                unitPrice,
+                totalValue: quantity * unitPrice,
+                createdAt,
+                purchaseDate: item.purchaseDate || dateInputValue(createdAt)
+            };
+        }
+
+        function buildItemHistoryFromItems(itemList) {
+            return itemList.map(createItemHistoryRecord);
+        }
+
+        function mergeItemHistory(...historyLists) {
+            const recordsById = new Map();
+            historyLists.flat().forEach(record => {
+                const id = record.id || `${record.itemId}-created`;
+                if (id) recordsById.set(id, { ...record, id });
+            });
+            return [...recordsById.values()];
+        }
+
+        function getHistoryDate(record, mode) {
+            return mode === 'purchaseDate' ? (record.purchaseDate || '') : (record.createdAt || '');
+        }
+
+        function formatHistoryDate(value) {
+            if (!value) return '未記錄';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('zh-TW');
+        }
+
+        function appendHistoryCell(row, value, className = '') {
+            const cell = document.createElement('td');
+            cell.className = `px-3 py-2.5 text-sm text-slate-700 ${className}`.trim();
+            cell.textContent = value;
+            row.appendChild(cell);
+        }
+
         function persistAccountDataLocally() {
             if (!activeGoogleAccount) return;
             ensureItemHistoricalValues();
@@ -1484,6 +1809,8 @@
             localStorage.setItem(accountStorageKey('hero_title'), heroTitle);
             localStorage.setItem(accountStorageKey('hero_bg'), heroBgUrl);
             localStorage.setItem(accountStorageKey('view_mode'), viewMode);
+            localStorage.setItem(accountStorageKey('changelog_seen_stamp'), changelogSeenStamp);
+            localStorage.setItem(accountStorageKey('item_history'), JSON.stringify(itemHistory));
         }
 
         function loadAccountDataLocally(accountId) {
@@ -1496,6 +1823,8 @@
                 heroTitle = localStorage.getItem(accountStorageKey('hero_title', accountId)) || initialAppData.heroTitle;
                 heroBgUrl = localStorage.getItem(accountStorageKey('hero_bg', accountId)) || initialAppData.heroBgUrl;
                 viewMode = localStorage.getItem(accountStorageKey('view_mode', accountId)) || initialAppData.viewMode;
+                changelogSeenStamp = localStorage.getItem(accountStorageKey('changelog_seen_stamp', accountId)) || '';
+                itemHistory = readStoredJson(accountStorageKey('item_history', accountId), buildItemHistoryFromItems(items));
                 return;
             }
 
@@ -1507,6 +1836,8 @@
             heroTitle = localStorage.getItem('dsm_hero_title') || initialAppData.heroTitle;
             heroBgUrl = localStorage.getItem('dsm_hero_bg') || initialAppData.heroBgUrl;
             viewMode = localStorage.getItem('dsm_view_mode') || initialAppData.viewMode;
+            changelogSeenStamp = '';
+            itemHistory = buildItemHistoryFromItems(items);
 
             persistAccountDataLocally();
             ['dsm_categories', 'dsm_category_schemas', 'dsm_items', 'dsm_hero_title', 'dsm_hero_bg', 'dsm_view_mode', GOOGLE_DRIVE_FILE_KEY]
@@ -1520,6 +1851,8 @@
             heroTitle = initialAppData.heroTitle;
             heroBgUrl = initialAppData.heroBgUrl;
             viewMode = initialAppData.viewMode;
+            changelogSeenStamp = initialAppData.changelogSeenStamp;
+            itemHistory = JSON.parse(JSON.stringify(initialAppData.itemHistory));
             applyHeroSettingsUI();
             renderCategoryOptions();
             filterAndRender();
@@ -1543,7 +1876,8 @@
             const loginOverlay = document.getElementById('login-required-overlay');
             if (!btnText || !btn || !accountEmail || !logoutBtn || !loginOverlay) return;
 
-            btnText.textContent = isConnected ? '已連結 Google 雲端' : 'Google 登入同步';
+            const isLocalDemo = Boolean(activeGoogleAccount?.localOnly);
+            btnText.textContent = isConnected ? (isLocalDemo ? '本機測試模式' : '已連結 Google 雲端') : 'Google 登入同步';
             btn.classList.toggle('border-emerald-500', isConnected);
             btn.classList.toggle('text-emerald-600', isConnected);
             btn.classList.toggle('hidden', isConnected);
@@ -1551,6 +1885,8 @@
             accountEmail.title = email || '已登入的 Google 帳號';
             accountEmail.classList.toggle('hidden', !isConnected || !email);
             logoutBtn.classList.toggle('hidden', !isConnected);
+            logoutBtn.title = isLocalDemo ? '離開本機測試模式' : '登出 Google 並解除雲端連結';
+            logoutBtn.querySelector('span').textContent = isLocalDemo ? '結束測試' : '登出 Google';
             loginOverlay.classList.toggle('hidden', isConnected);
             const heroSection = document.getElementById('hero-section');
             const appSection = document.getElementById('app-section');
@@ -1567,9 +1903,11 @@
                 categories,
                 categorySchemas,
                 items,
+                itemHistory,
                 heroTitle,
                 heroBgUrl,
                 viewMode,
+                changelogSeenStamp,
                 updatedAt: new Date().toISOString(),
                 version: 1
             };
@@ -1623,8 +1961,9 @@
             }
 
             const driveHasStarterSample = Array.isArray(data.items) && data.items.some(isStarterSampleItem);
+            let driveItems = items;
             if (Array.isArray(data.items)) {
-                const driveItems = removeStarterSampleItems(data.items);
+                driveItems = removeStarterSampleItems(data.items);
                 items = migratedLegacyDataToAccount
                     ? removeStarterSampleItems([...driveItems, ...items.filter(localItem => !driveItems.some(driveItem => driveItem.id === localItem.id))])
                     : driveItems;
@@ -1643,6 +1982,13 @@
             if (data.heroTitle) heroTitle = data.heroTitle;
             if (data.heroBgUrl) heroBgUrl = data.heroBgUrl;
             if (data.viewMode === 'card' || data.viewMode === 'table') viewMode = data.viewMode;
+            if (typeof data.changelogSeenStamp === 'string') changelogSeenStamp = data.changelogSeenStamp;
+            const driveItemHistory = Array.isArray(data.itemHistory)
+                ? data.itemHistory
+                : buildItemHistoryFromItems(driveItems);
+            itemHistory = migratedLegacyDataToAccount
+                ? mergeItemHistory(itemHistory, driveItemHistory)
+                : driveItemHistory;
 
             migratedLegacyDataToAccount = false;
             persistAccountDataLocally();
@@ -1813,6 +2159,7 @@
                             persistAccountDataLocally();
                             migratedLegacyDataToAccount = false;
                             setGoogleConnState(true, profile.email);
+                            showChangelogIfUpdated();
                             if (!isRestore) {
                                 Swal.fire({
                                     title: '已成功登入 Google！',
@@ -1875,6 +2222,7 @@
             const accessToken = googleAccessToken;
             googleAccessToken = null;
             localStorage.removeItem(GOOGLE_LOGIN_PREFERENCE_KEY);
+            localStorage.removeItem(LOCAL_DEMO_PREFERENCE_KEY);
             activeGoogleAccount = null;
             googleRestoreStarted = false;
             resetAccountDataInMemory();

@@ -11,6 +11,8 @@
 - Google 帳號登入後才能進入系統
 - Google Drive appData 雲端同步與帳號分區
 - LocalStorage 帳號分區快取
+- 唯讀更新歷程由程式碼中的 `CHANGELOG_CONTENT` 維護；登入者每次內容更新後會看到一次提示
+- 新增用品事件快照，可依新增日期或購買日期篩選
 
 ## 使用方式
 
@@ -30,6 +32,8 @@ python -m http.server 8000
 ```text
 http://localhost:8000
 ```
+
+在登入畫面點選「本機測試模式（不登入）」即可測試用品管理功能。此模式只會在 `localhost` 或 `127.0.0.1` 顯示，資料留在獨立的本機測試空間，不會同步到 Google Drive；按「結束測試」可回到登入畫面。重新整理後會恢復本機測試模式。
 
 ## Google Drive 設定（必填）
 
